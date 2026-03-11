@@ -73,9 +73,14 @@ public partial class MainForm : Form
         using var dialog = new FolderBrowserDialog
         {
             Description = "选择共享源目录",
-            SelectedPath = txtSourceDir.Text,
             UseDescriptionForTitle = true
         };
+        // Only pre-select if the path is a local directory that exists.
+        // UNC paths cause FolderBrowserDialog to hang while enumerating the network.
+        var current = txtSourceDir.Text.Trim();
+        if (!current.StartsWith(@"\\") && Directory.Exists(current))
+            dialog.SelectedPath = current;
+
         if (dialog.ShowDialog() == DialogResult.OK)
             txtSourceDir.Text = dialog.SelectedPath;
     }
@@ -85,9 +90,12 @@ public partial class MainForm : Form
         using var dialog = new FolderBrowserDialog
         {
             Description = "选择本地保存目录",
-            SelectedPath = txtLocalBaseDir.Text,
             UseDescriptionForTitle = true
         };
+        var current = txtLocalBaseDir.Text.Trim();
+        if (Directory.Exists(current))
+            dialog.SelectedPath = current;
+
         if (dialog.ShowDialog() == DialogResult.OK)
             txtLocalBaseDir.Text = dialog.SelectedPath;
     }
