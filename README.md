@@ -10,12 +10,17 @@
 - **计划任务管理** — 一键注册/卸载 Windows 计划任务
 - **零闪烁** — WinExe 子系统程序，计划任务执行时不会弹窗、不会抢焦点
 
+## 前置要求
+
+需要安装 [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0/runtime)（约 55MB，只需装一次）。
+
 ## 快速开始
 
-1. 从 [Releases](../../releases) 下载 `PhoenixManager.exe`
-2. 双击运行（首次会自动生成 `config.json`）
-3. 填写共享源目录和本地保存目录
-4. 点击「安装服务」注册计划任务
+1. 安装 .NET 8 Desktop Runtime（如未安装）
+2. 从 [Releases](../../releases) 下载 `PhoenixManager.exe`（~200KB）
+3. 双击运行（首次会自动生成 `config.json`）
+4. 填写共享源目录和本地保存目录
+5. 点击「安装服务」注册计划任务
 
 > 需要管理员权限（注册计划任务需要）。
 
@@ -95,11 +100,11 @@ PhoenixManager.exe              # 打开 GUI
 # 编译
 dotnet build -c Release
 
-# 发布单文件自包含 exe
-dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o ./publish
+# 发布单文件 exe（framework-dependent）
+dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o ./publish
 ```
 
-产物在 `publish/PhoenixManager.exe`，约 155 MB，包含 .NET 运行时，同事无需额外安装。
+产物在 `publish/PhoenixManager.exe`，约 200KB。运行需要 .NET 8 Desktop Runtime。
 
 ## 项目结构
 

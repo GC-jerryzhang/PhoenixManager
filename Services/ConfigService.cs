@@ -4,15 +4,15 @@ using PhoenixManager.Models;
 
 namespace PhoenixManager.Services;
 
+[JsonSerializable(typeof(AppConfig))]
+[JsonSourceGenerationOptions(
+    WriteIndented = true,
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
+internal partial class AppConfigJsonContext : JsonSerializerContext;
+
 public static class ConfigService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
-
     public static string ConfigPath
     {
         get
@@ -33,12 +33,12 @@ public static class ConfigService
         }
 
         var json = File.ReadAllText(path);
-        return JsonSerializer.Deserialize<AppConfig>(json, JsonOptions) ?? new AppConfig();
+        return JsonSerializer.Deserialize(json, AppConfigJsonContext.Default.AppConfig) ?? new AppConfig();
     }
 
     public static void Save(AppConfig config)
     {
-        var json = JsonSerializer.Serialize(config, JsonOptions);
+        var json = JsonSerializer.Serialize(config, AppConfigJsonContext.Default.AppConfig);
         File.WriteAllText(ConfigPath, json);
     }
 }
