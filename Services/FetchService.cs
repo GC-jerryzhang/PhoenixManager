@@ -31,10 +31,12 @@ public static class FetchService
                 return string.Join(Environment.NewLine, log);
             }
 
-            FetchDesigner(config, Log);
-            FetchServer(config, Log);
+            var copiedDesigner = FetchDesigner(config, Log);
+            var copiedServer = FetchServer(config, Log);
 
             Log("=== Fetch cycle completed ===");
+
+            NotificationService.ShowFetchResult(copiedDesigner, copiedServer);
         }
         catch (Exception ex)
         {
@@ -45,7 +47,7 @@ public static class FetchService
         return string.Join(Environment.NewLine, log);
     }
 
-    private static void FetchDesigner(AppConfig config, Action<string, string> log)
+    private static string? FetchDesigner(AppConfig config, Action<string, string> log)
     {
         log("--- Designer check ---", "INFO");
 
@@ -58,7 +60,7 @@ public static class FetchService
         if (designerFiles.Count == 0)
         {
             log("No Designer installer found in source.", "WARNING");
-            return;
+            return null;
         }
 
         var latest = designerFiles[0];
@@ -67,7 +69,7 @@ public static class FetchService
         if (!IsFileStable(latest.FullName))
         {
             log("Designer file still being written, skipping this cycle.", "WARNING");
-            return;
+            return null;
         }
 
         var versionInfo = FileVersionInfo.GetVersionInfo(latest.FullName);
@@ -76,7 +78,7 @@ public static class FetchService
         if (buildNum == 0)
         {
             log($"Could not read FilePrivatePart from {latest.Name}, skipping.", "WARNING");
-            return;
+            return null;
         }
 
         var destName = $"{buildNum}Phoenix-Windows-0.0.1-Setup.exe";
@@ -85,16 +87,17 @@ public static class FetchService
         if (File.Exists(destPath))
         {
             log($"Designer already exists: {destName} (skipped)", "INFO");
-            return;
+            return null;
         }
 
         log($"Copying Designer -> {destName}", "INFO");
         File.Copy(latest.FullName, destPath, overwrite: false);
         var size = new FileInfo(destPath).Length;
         log($"Designer copied successfully: {destName} (Size: {size} bytes)", "INFO");
+        return destName;
     }
 
-    private static void FetchServer(AppConfig config, Action<string, string> log)
+    private static string? FetchServer(AppConfig config, Action<string, string> log)
     {
         log("--- Server check ---", "INFO");
 
@@ -106,7 +109,7 @@ public static class FetchService
         if (serverFiles.Count == 0)
         {
             log("No Server installer found in source.", "WARNING");
-            return;
+            return null;
         }
 
         var latest = serverFiles[0];
@@ -115,14 +118,14 @@ public static class FetchService
         if (!IsFileStable(latest.FullName))
         {
             log("Server file still being written, skipping this cycle.", "WARNING");
-            return;
+            return null;
         }
 
         var match = Regex.Match(latest.Name, @"Phoenix-Server-Windows-(\d{12})\.exe");
         if (!match.Success)
         {
             log($"Could not parse timestamp from Server filename: {latest.Name}", "WARNING");
-            return;
+            return null;
         }
 
         var timestamp = match.Groups[1].Value;
@@ -132,13 +135,14 @@ public static class FetchService
         if (File.Exists(destPath))
         {
             log($"Server already exists: {destName} (skipped)", "INFO");
-            return;
+            return null;
         }
 
         log($"Copying Server -> {destName}", "INFO");
         File.Copy(latest.FullName, destPath, overwrite: false);
         var size = new FileInfo(destPath).Length;
         log($"Server copied successfully: {destName} (Size: {size} bytes)", "INFO");
+        return destName;
     }
 
     private static bool IsFileStable(string path)

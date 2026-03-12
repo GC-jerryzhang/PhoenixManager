@@ -23,6 +23,7 @@ public static class CleanupService
 
             TieredCleanup(config.DesignerDir, "Designer", config.CleanupWeeks, Log);
             TieredCleanup(config.ServerDir, "Server", config.CleanupWeeks, Log);
+            CleanupLogs(config.LogDir, 30, Log);
 
             Log("=== Cleanup completed ===");
         }
@@ -126,5 +127,31 @@ public static class CleanupService
     {
         var match = Regex.Match(name, @"^(\d+)");
         return match.Success ? long.Parse(match.Groups[1].Value) : 0;
+    }
+
+    private static void CleanupLogs(string logDir, int retainDays, Action<string, string> log)
+    {
+        if (!Directory.Exists(logDir))
+            return;
+
+        var cutoff = DateTime.Now.AddDays(-retainDays);
+        var logFiles = Directory.GetFiles(logDir, "*.log")
+            .Select(f => new FileInfo(f))
+            .Where(f => f.LastWriteTime < cutoff)
+            .ToList();
+
+        if (logFiles.Count == 0)
+        {
+            log($"Logs: nothing to clean (retaining {retainDays} days).", "INFO");
+            return;
+        }
+
+        log($"--- Log cleanup: {logFiles.Count} files older than {retainDays} days ---", "INFO");
+
+        foreach (var file in logFiles)
+        {
+            log($"Delete log: {file.Name}", "INFO");
+            file.Delete();
+        }
     }
 }
