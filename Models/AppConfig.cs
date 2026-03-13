@@ -1,4 +1,4 @@
-namespace PhoenixManager.Models;
+namespace PhoenixToolkit.Models;
 
 public sealed record CleanupWeeks(
     int KeepAllWeeks = 3,

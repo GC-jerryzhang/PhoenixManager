@@ -1,4 +1,4 @@
-namespace PhoenixManager;
+namespace PhoenixToolkit;
 
 partial class MainForm
 {
@@ -48,6 +48,15 @@ partial class MainForm
         this.grpFetch.SuspendLayout();
         this.grpCleanup.SuspendLayout();
         this.SuspendLayout();
+
+        // grpLogs - 产品日志
+        this.grpLogs = new GroupBox();
+        this.btnLogDesigner = new Button();
+        this.btnLogDesignerServer = new Button();
+        this.btnLogRuntimeServer = new Button();
+        this.btnLogServerLocal = new Button();
+        this.btnLogRoot = new Button();
+        this.grpLogs.SuspendLayout();
 
         // lblSourceDir
         this.lblSourceDir.AutoSize = true;
@@ -172,44 +181,79 @@ partial class MainForm
         });
 
         // Buttons
-        this.btnInstall.Location = new Point(20, 295);
+        this.btnInstall.Location = new Point(20, 370);
         this.btnInstall.Size = new Size(100, 32);
         this.btnInstall.Text = "安装服务";
         this.btnInstall.Click += BtnInstall_Click;
 
-        this.btnUninstall.Location = new Point(130, 295);
+        this.btnUninstall.Location = new Point(130, 370);
         this.btnUninstall.Size = new Size(100, 32);
         this.btnUninstall.Text = "卸载服务";
         this.btnUninstall.Click += BtnUninstall_Click;
 
-        this.btnFetchNow.Location = new Point(280, 295);
+        this.btnFetchNow.Location = new Point(280, 370);
         this.btnFetchNow.Size = new Size(100, 32);
         this.btnFetchNow.Text = "立即拉取";
         this.btnFetchNow.Click += BtnFetchNow_Click;
 
-        this.btnCleanupNow.Location = new Point(390, 295);
+        this.btnCleanupNow.Location = new Point(390, 370);
         this.btnCleanupNow.Size = new Size(100, 32);
         this.btnCleanupNow.Text = "立即清理";
         this.btnCleanupNow.Click += BtnCleanupNow_Click;
 
         // lblStatus
-        this.lblStatus.Location = new Point(20, 340);
+        this.lblStatus.Location = new Point(20, 415);
         this.lblStatus.Size = new Size(520, 20);
         this.lblStatus.Text = "状态: 检查中...";
+
+        // grpLogs
+        this.grpLogs.Location = new Point(20, 290);
+        this.grpLogs.Size = new Size(520, 65);
+        this.grpLogs.Text = "产品日志";
+
+        this.btnLogDesigner.Location = new Point(15, 25);
+        this.btnLogDesigner.Size = new Size(90, 28);
+        this.btnLogDesigner.Text = "Designer";
+        this.btnLogDesigner.Click += BtnLogDesigner_Click;
+
+        this.btnLogDesignerServer.Location = new Point(112, 25);
+        this.btnLogDesignerServer.Size = new Size(100, 28);
+        this.btnLogDesignerServer.Text = "Designer后端";
+        this.btnLogDesignerServer.Click += BtnLogDesignerServer_Click;
+
+        this.btnLogRuntimeServer.Location = new Point(219, 25);
+        this.btnLogRuntimeServer.Size = new Size(90, 28);
+        this.btnLogRuntimeServer.Text = "Runtime";
+        this.btnLogRuntimeServer.Click += BtnLogRuntimeServer_Click;
+
+        this.btnLogServerLocal.Location = new Point(316, 25);
+        this.btnLogServerLocal.Size = new Size(90, 28);
+        this.btnLogServerLocal.Text = "Server";
+        this.btnLogServerLocal.Click += BtnLogServerLocal_Click;
+
+        this.btnLogRoot.Location = new Point(413, 25);
+        this.btnLogRoot.Size = new Size(90, 28);
+        this.btnLogRoot.Text = "日志根目录";
+        this.btnLogRoot.Click += BtnLogRoot_Click;
+
+        this.grpLogs.Controls.AddRange(new Control[] {
+            this.btnLogDesigner, this.btnLogDesignerServer,
+            this.btnLogRuntimeServer, this.btnLogServerLocal, this.btnLogRoot
+        });
 
         // MainForm
         this.AutoScaleDimensions = new SizeF(7F, 15F);
         this.AutoScaleMode = AutoScaleMode.Font;
-        this.ClientSize = new Size(560, 375);
+        this.ClientSize = new Size(560, 450);
         this.FormBorderStyle = FormBorderStyle.FixedSingle;
         this.MaximizeBox = false;
         this.StartPosition = FormStartPosition.CenterScreen;
-        this.Text = "Phoenix Installer Manager";
+        this.Text = "Phoenix 测试辅助工具";
 
         this.Controls.AddRange(new Control[] {
             this.lblSourceDir, this.txtSourceDir, this.btnBrowseSource,
             this.lblLocalDir, this.txtLocalBaseDir, this.btnBrowseLocal,
-            this.grpFetch, this.grpCleanup,
+            this.grpFetch, this.grpCleanup, this.grpLogs,
             this.btnInstall, this.btnUninstall, this.btnFetchNow, this.btnCleanupNow,
             this.lblStatus
         });
@@ -222,6 +266,8 @@ partial class MainForm
         this.grpFetch.PerformLayout();
         this.grpCleanup.ResumeLayout(false);
         this.grpCleanup.PerformLayout();
+        this.grpLogs.ResumeLayout(false);
+        this.grpLogs.PerformLayout();
         this.ResumeLayout(false);
         this.PerformLayout();
     }
@@ -253,4 +299,10 @@ partial class MainForm
     private Label lblDeleteAfter;
     private Label lblDeleteAfterUnit;
     private Label lblCleanupTime;
+    private GroupBox grpLogs;
+    private Button btnLogDesigner;
+    private Button btnLogDesignerServer;
+    private Button btnLogRuntimeServer;
+    private Button btnLogServerLocal;
+    private Button btnLogRoot;
 }

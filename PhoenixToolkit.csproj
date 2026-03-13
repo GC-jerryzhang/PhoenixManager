@@ -8,8 +8,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <AssemblyName>PhoenixManager</AssemblyName>
-    <RootNamespace>PhoenixManager</RootNamespace>
+    <AssemblyName>PhoenixToolkit</AssemblyName>
+    <RootNamespace>PhoenixToolkit</RootNamespace>
     <Version>1.0.0</Version>
   </PropertyGroup>
 

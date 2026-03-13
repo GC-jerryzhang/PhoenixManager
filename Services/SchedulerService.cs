@@ -1,12 +1,12 @@
 using System.Diagnostics;
-using PhoenixManager.Models;
+using PhoenixToolkit.Models;
 
-namespace PhoenixManager.Services;
+namespace PhoenixToolkit.Services;
 
 public static class SchedulerService
 {
-    private const string FetchTaskName = "FetchPhoenixInstaller";
-    private const string CleanupTaskName = "CleanupPhoenixInstaller";
+    private const string FetchTaskName = "PhoenixToolkit_Fetch";
+    private const string CleanupTaskName = "PhoenixToolkit_Cleanup";
 
     public static string Install(AppConfig config)
     {

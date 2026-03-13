@@ -1,6 +1,6 @@
 using Microsoft.Toolkit.Uwp.Notifications;
 
-namespace PhoenixManager.Services;
+namespace PhoenixToolkit.Services;
 
 public static class NotificationService
 {

@@ -1,8 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using PhoenixManager.Models;
+using PhoenixToolkit.Models;
 
-namespace PhoenixManager.Services;
+namespace PhoenixToolkit.Services;
 
 [JsonSerializable(typeof(AppConfig))]
 [JsonSourceGenerationOptions(

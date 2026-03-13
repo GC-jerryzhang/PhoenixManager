@@ -1,7 +1,7 @@
-using PhoenixManager;
-using PhoenixManager.Services;
+using PhoenixToolkit;
+using PhoenixToolkit.Services;
 
-namespace PhoenixManager;
+namespace PhoenixToolkit;
 
 internal static class Program
 {

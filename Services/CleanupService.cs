@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
-using PhoenixManager.Models;
+using PhoenixToolkit.Models;
 
-namespace PhoenixManager.Services;
+namespace PhoenixToolkit.Services;
 
 public static class CleanupService
 {

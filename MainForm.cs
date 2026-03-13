@@ -1,7 +1,8 @@
-using PhoenixManager.Models;
-using PhoenixManager.Services;
+using System.Diagnostics;
+using PhoenixToolkit.Models;
+using PhoenixToolkit.Services;
 
-namespace PhoenixManager;
+namespace PhoenixToolkit;
 
 public partial class MainForm : Form
 {
@@ -161,4 +162,32 @@ public partial class MainForm : Form
             btnCleanupNow.Text = "立即清理";
         }
     }
+
+    private void OpenLogFolder(string subDir)
+    {
+        var path = string.IsNullOrEmpty(subDir)
+            ? Path.Combine(Path.GetTempPath(), "phoenix-logs")
+            : Path.Combine(Path.GetTempPath(), "phoenix-logs", subDir);
+
+        if (Directory.Exists(path))
+            Process.Start("explorer.exe", path);
+        else
+            MessageBox.Show($"日志目录不存在:\n{path}", "提示",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    private void BtnLogDesigner_Click(object? sender, EventArgs e) =>
+        OpenLogFolder("designer");
+
+    private void BtnLogDesignerServer_Click(object? sender, EventArgs e) =>
+        OpenLogFolder("designer-server");
+
+    private void BtnLogRuntimeServer_Click(object? sender, EventArgs e) =>
+        OpenLogFolder("runtime-server");
+
+    private void BtnLogServerLocal_Click(object? sender, EventArgs e) =>
+        OpenLogFolder("server-local");
+
+    private void BtnLogRoot_Click(object? sender, EventArgs e) =>
+        OpenLogFolder("");
 }
