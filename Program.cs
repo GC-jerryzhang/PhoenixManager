@@ -8,6 +8,8 @@ internal static class Program
     [STAThread]
     static void Main(string[] args)
     {
+        InstallActivationService.Initialize();
+
         // CLI mode: --fetch or --cleanup (called by scheduled tasks, no GUI)
         if (args.Length > 0)
         {
@@ -24,6 +26,9 @@ internal static class Program
                     return;
             }
         }
+
+        if (InstallActivationService.HandleStartupActivationIfNeeded())
+            return;
 
         // GUI mode
         Application.EnableVisualStyles();

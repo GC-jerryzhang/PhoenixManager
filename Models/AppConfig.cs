@@ -19,4 +19,6 @@ public sealed record AppConfig(
     public string DesignerDir => Path.Combine(LocalBaseDir, "designer");
     public string ServerDir => Path.Combine(LocalBaseDir, "server");
     public string LogDir => Path.Combine(LocalBaseDir, "log");
+    public string StateDir => Path.Combine(LocalBaseDir, "state");
+    public string InstallPlanDir => Path.Combine(StateDir, "install-plans");
 }

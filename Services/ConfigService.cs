@@ -5,6 +5,8 @@ using PhoenixToolkit.Models;
 namespace PhoenixToolkit.Services;
 
 [JsonSerializable(typeof(AppConfig))]
+[JsonSerializable(typeof(FetchedPackageInfo))]
+[JsonSerializable(typeof(InstallPlan))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,

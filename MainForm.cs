@@ -22,7 +22,9 @@ public partial class MainForm : Form
         numKeepAll.Value = config.CleanupWeeks.KeepAllWeeks;
         numKeepDaily.Value = config.CleanupWeeks.KeepDailyWeeks;
         numDeleteAfter.Value = config.CleanupWeeks.DeleteAfterWeeks;
-        txtCleanupTime.Text = config.CleanupTime;
+        timeCleanup.Value = ParseCleanupTime(config.CleanupTime);
+        ResetPathTextScroll(txtSourceDir);
+        ResetPathTextScroll(txtLocalBaseDir);
     }
 
     private AppConfig BuildConfigFromUI()
@@ -31,7 +33,7 @@ public partial class MainForm : Form
             SourceDir: txtSourceDir.Text.Trim(),
             LocalBaseDir: txtLocalBaseDir.Text.Trim(),
             FetchIntervalMinutes: (int)numFetchInterval.Value,
-            CleanupTime: txtCleanupTime.Text.Trim(),
+            CleanupTime: timeCleanup.Value.ToString("HH:mm"),
             CleanupWeeks: new CleanupWeeks(
                 KeepAllWeeks: (int)numKeepAll.Value,
                 KeepDailyWeeks: (int)numKeepDaily.Value,
@@ -190,4 +192,18 @@ public partial class MainForm : Form
 
     private void BtnLogRoot_Click(object? sender, EventArgs e) =>
         OpenLogFolder("");
+
+    private static DateTime ParseCleanupTime(string cleanupTime)
+    {
+        if (TimeOnly.TryParse(cleanupTime, out var parsedTime))
+            return DateTime.Today.Add(parsedTime.ToTimeSpan());
+
+        return DateTime.Today.AddHours(9).AddMinutes(30);
+    }
+
+    private static void ResetPathTextScroll(TextBox textBox)
+    {
+        textBox.SelectionStart = 0;
+        textBox.SelectionLength = 0;
+    }
 }

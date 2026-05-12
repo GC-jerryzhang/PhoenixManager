@@ -33,10 +33,11 @@ public static class FetchService
 
             var copiedDesigner = FetchDesigner(config, Log);
             var copiedServer = FetchServer(config, Log);
+            var installPlan = InstallPlanService.CreatePlan(config, copiedDesigner, copiedServer);
 
             Log("=== Fetch cycle completed ===");
 
-            NotificationService.ShowFetchResult(copiedDesigner, copiedServer);
+            NotificationService.ShowFetchResult(installPlan);
         }
         catch (Exception ex)
         {
@@ -47,7 +48,7 @@ public static class FetchService
         return string.Join(Environment.NewLine, log);
     }
 
-    private static string? FetchDesigner(AppConfig config, Action<string, string> log)
+    private static FetchedPackageInfo? FetchDesigner(AppConfig config, Action<string, string> log)
     {
         log("--- Designer check ---", "INFO");
 
@@ -94,10 +95,14 @@ public static class FetchService
         File.Copy(latest.FullName, destPath, overwrite: false);
         var size = new FileInfo(destPath).Length;
         log($"Designer copied successfully: {destName} (Size: {size} bytes)", "INFO");
-        return destName;
+        return new FetchedPackageInfo(
+            Kind: PackageKind.Designer,
+            FileName: destName,
+            FullPath: destPath,
+            FetchedAt: DateTimeOffset.Now);
     }
 
-    private static string? FetchServer(AppConfig config, Action<string, string> log)
+    private static FetchedPackageInfo? FetchServer(AppConfig config, Action<string, string> log)
     {
         log("--- Server check ---", "INFO");
 
@@ -142,7 +147,11 @@ public static class FetchService
         File.Copy(latest.FullName, destPath, overwrite: false);
         var size = new FileInfo(destPath).Length;
         log($"Server copied successfully: {destName} (Size: {size} bytes)", "INFO");
-        return destName;
+        return new FetchedPackageInfo(
+            Kind: PackageKind.Server,
+            FileName: destName,
+            FullPath: destPath,
+            FetchedAt: DateTimeOffset.Now);
     }
 
     private static bool IsFileStable(string path)
@@ -158,6 +167,7 @@ public static class FetchService
         Directory.CreateDirectory(config.DesignerDir);
         Directory.CreateDirectory(config.ServerDir);
         Directory.CreateDirectory(config.LogDir);
+        Directory.CreateDirectory(config.InstallPlanDir);
     }
 
     private static void WriteLog(string logFile, List<string> log)
