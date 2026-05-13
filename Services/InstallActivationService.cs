@@ -88,7 +88,7 @@ public static class InstallActivationService
         return true;
     }
 
-    private static void ExecuteInstallPlan(string planId)
+    public static void ExecuteInstallPlan(string planId)
     {
         var config = ConfigService.Load();
 

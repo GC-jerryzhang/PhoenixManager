@@ -7,6 +7,7 @@ namespace PhoenixToolkit.Services;
 [JsonSerializable(typeof(AppConfig))]
 [JsonSerializable(typeof(FetchedPackageInfo))]
 [JsonSerializable(typeof(InstallPlan))]
+[JsonSerializable(typeof(Uri))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,

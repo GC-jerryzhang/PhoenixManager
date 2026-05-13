@@ -8,7 +8,11 @@ internal static class Program
     [STAThread]
     static void Main(string[] args)
     {
+        ProtocolActivationService.EnsureRegistered();
         InstallActivationService.Initialize();
+
+        if (ProtocolActivationService.TryHandleLaunchArgs(args))
+            return;
 
         // CLI mode: --fetch or --cleanup (called by scheduled tasks, no GUI)
         if (args.Length > 0)

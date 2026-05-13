@@ -10,6 +10,7 @@ public static class NotificationService
         if (installPlan is null)
             return;
 
+        var installUri = ProtocolActivationService.BuildInstallUri(installPlan.Id);
         var lines = new List<string>();
         if (installPlan.DesignerPackage is not null)
             lines.Add($"Designer: {installPlan.DesignerPackage.FileName}");
@@ -21,8 +22,7 @@ public static class NotificationService
             : "点击通知开始安装";
 
         new ToastContentBuilder()
-            .AddArgument("action", "install")
-            .AddArgument("planId", installPlan.Id)
+            .SetProtocolActivation(installUri)
             .AddText("Phoenix 新安装包已拉取")
             .AddText(string.Join(Environment.NewLine, lines))
             .AddText(actionText)
