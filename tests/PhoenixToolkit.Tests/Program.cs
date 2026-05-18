@@ -14,6 +14,7 @@ internal static class Program
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
+    [STAThread]
     private static int Main()
     {
         var tests = new Action[]
@@ -21,7 +22,9 @@ internal static class Program
             CleanupExpiredPlansDeletesExpiredInactivePlans,
             CleanupExpiredPlansFallsBackToFileTimestampForMalformedPlans,
             CreatePlanReusesInstallPlanCleanupRules,
-            CleanupServiceRunsInstallPlanCleanupAndKeepsLockedPlans
+            CleanupServiceRunsInstallPlanCleanupAndKeepsLockedPlans,
+            CleanupResultDialogUsesFixedScrollableLayout,
+            CleanupResultDialogHasBottomConfirmButton
         };
 
         foreach (var test in tests)
@@ -232,6 +235,36 @@ internal static class Program
         });
     }
 
+    private static void CleanupResultDialogUsesFixedScrollableLayout()
+    {
+        using var dialog = new CleanupResultDialog(BuildLongCleanupResult());
+        var resultTextBox = FindRequiredControl<TextBox>(dialog, "cleanupResultTextBox");
+
+        Assert.Equal(new Size(760, 520), dialog.ClientSize, "Cleanup result dialog should use a fixed client size.");
+        Assert.Equal(FormBorderStyle.FixedDialog, dialog.FormBorderStyle, "Cleanup result dialog should not auto-resize with content.");
+        Assert.Equal(dialog.MinimumSize, dialog.MaximumSize, "Cleanup result dialog should have bounded size.");
+        Assert.True(resultTextBox.Multiline, "Cleanup result text box should support multiple lines.");
+        Assert.True(resultTextBox.ReadOnly, "Cleanup result text box should be read-only.");
+        Assert.Equal(ScrollBars.Both, resultTextBox.ScrollBars, "Cleanup result text box should allow scrolling.");
+        Assert.False(resultTextBox.WordWrap, "Cleanup result text should preserve line layout and horizontal scrolling.");
+        Assert.Contains(resultTextBox.Text, "第 40 行", "Cleanup result dialog should preserve the full cleanup text.");
+    }
+
+    private static void CleanupResultDialogHasBottomConfirmButton()
+    {
+        using var dialog = new CleanupResultDialog("清理完成");
+        var confirmButton = FindRequiredControl<Button>(dialog, "cleanupResultConfirmButton");
+        var actionsPanel = FindRequiredControl<FlowLayoutPanel>(dialog, "cleanupResultActionsPanel");
+        var rootLayout = AssertType<TableLayoutPanel>(dialog.Controls[0], "Cleanup result dialog should use a root layout panel.");
+
+        Assert.Equal("确定", confirmButton.Text, "Cleanup result dialog should expose an explicit confirm button.");
+        Assert.Equal(DialogResult.OK, confirmButton.DialogResult, "Confirm button should close the dialog.");
+        Assert.Same(confirmButton, dialog.AcceptButton, "Confirm button should be the default accept action.");
+        Assert.Same(confirmButton, dialog.CancelButton, "Confirm button should also handle cancel/escape.");
+        Assert.Equal(FlowDirection.RightToLeft, actionsPanel.FlowDirection, "Confirm button should live in the bottom action area.");
+        Assert.Equal(2, rootLayout.GetPositionFromControl(actionsPanel).Row, "Action area should be placed at the bottom row.");
+    }
+
     private static void RunIsolated(Action<AppConfig> test)
     {
         var root = Path.Combine(Path.GetTempPath(), "PhoenixToolkit.Tests", Guid.NewGuid().ToString("N"));
@@ -261,6 +294,23 @@ internal static class Program
         var json = JsonSerializer.Serialize(plan, JsonOptions);
         File.WriteAllText(path, json);
         return path;
+    }
+
+    private static string BuildLongCleanupResult()
+    {
+        return string.Join(
+            Environment.NewLine,
+            Enumerable.Range(1, 40).Select(index => $"第 {index} 行清理结果 - 这是用于验证滚动区域的长文本。"));
+    }
+
+    private static T FindRequiredControl<T>(Control root, string name)
+        where T : Control
+    {
+        var control = root.Controls.Find(name, searchAllChildren: true).FirstOrDefault();
+        if (control is T typedControl)
+            return typedControl;
+
+        throw new InvalidOperationException($"Expected to find control '{name}' of type {typeof(T).Name}.");
     }
 
     private static class Assert
@@ -294,5 +344,27 @@ internal static class Program
             if (!text.Contains(expectedSubstring, StringComparison.Ordinal))
                 throw new InvalidOperationException(message);
         }
+
+        public static void Equal<T>(T expected, T actual, string message)
+            where T : notnull
+        {
+            if (!EqualityComparer<T>.Default.Equals(expected, actual))
+                throw new InvalidOperationException($"{message} Expected: {expected}. Actual: {actual}.");
+        }
+
+        public static void Same(object expected, object? actual, string message)
+        {
+            if (!ReferenceEquals(expected, actual))
+                throw new InvalidOperationException(message);
+        }
+    }
+
+    private static T AssertType<T>(object value, string message)
+        where T : class
+    {
+        if (value is T typedValue)
+            return typedValue;
+
+        throw new InvalidOperationException(message);
     }
 }

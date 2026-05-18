@@ -152,7 +152,8 @@ public partial class MainForm : Form
         try
         {
             var result = await Task.Run(() => CleanupService.Execute(config));
-            MessageBox.Show(result, "清理结果", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            using var dialog = new CleanupResultDialog(result);
+            dialog.ShowDialog(this);
         }
         catch (Exception ex)
         {
