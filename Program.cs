@@ -8,18 +8,20 @@ internal static class Program
     [STAThread]
     static void Main(string[] args)
     {
+        var launchArgs = RuntimeModeService.Initialize(args);
+
         ProtocolActivationService.EnsureRegistered();
         InstallActivationService.Initialize();
 
-        if (ProtocolActivationService.TryHandleLaunchArgs(args))
+        if (ProtocolActivationService.TryHandleLaunchArgs(launchArgs))
             return;
 
         // CLI mode: --fetch or --cleanup (called by scheduled tasks, no GUI)
-        if (args.Length > 0)
+        if (launchArgs.Length > 0)
         {
             var config = ConfigService.Load();
 
-            switch (args[0].ToLowerInvariant())
+            switch (launchArgs[0].ToLowerInvariant())
             {
                 case "--fetch":
                     FetchService.Execute(config);

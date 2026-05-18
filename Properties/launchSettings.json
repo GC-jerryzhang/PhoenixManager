@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "PhoenixToolkit": {
+      "commandName": "Project",
+      "commandLineArgs": "--dev"
+    }
+  }
+}

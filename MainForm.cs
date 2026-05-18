@@ -9,6 +9,7 @@ public partial class MainForm : Form
     public MainForm()
     {
         InitializeComponent();
+        ApplyRuntimeModePresentation();
         LoadConfig();
         RefreshStatus();
     }
@@ -50,6 +51,13 @@ public partial class MainForm : Form
 
     private void RefreshStatus()
     {
+        if (RuntimeModeService.IsDevelopment)
+        {
+            lblStatus.Text = "状态: DEV 模式 - 可直接调试，计划任务安装请使用正式发布版";
+            lblStatus.ForeColor = Color.DarkOrange;
+            return;
+        }
+
         var (fetchInstalled, cleanupInstalled) = SchedulerService.GetStatus();
 
         if (fetchInstalled && cleanupInstalled)
@@ -206,5 +214,14 @@ public partial class MainForm : Form
     {
         textBox.SelectionStart = 0;
         textBox.SelectionLength = 0;
+    }
+
+    private void ApplyRuntimeModePresentation()
+    {
+        if (!RuntimeModeService.IsDevelopment)
+            return;
+
+        Text += RuntimeModeService.DisplaySuffix;
+        lblSubtitle.Text += "（DEV 模式：配置与状态写入独立目录）";
     }
 }

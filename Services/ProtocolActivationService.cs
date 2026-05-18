@@ -10,6 +10,9 @@ public static class ProtocolActivationService
 
     public static void EnsureRegistered()
     {
+        if (RuntimeModeService.IsDevelopment)
+            return;
+
         var exePath = Environment.ProcessPath
             ?? Process.GetCurrentProcess().MainModule?.FileName
             ?? throw new InvalidOperationException("Cannot determine exe path.");

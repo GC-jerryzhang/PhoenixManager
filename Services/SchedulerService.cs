@@ -7,9 +7,13 @@ public static class SchedulerService
 {
     private const string FetchTaskName = "PhoenixToolkit_Fetch";
     private const string CleanupTaskName = "PhoenixToolkit_Cleanup";
+    private const string DevModeTaskMessage = "当前为 DEV 模式，请使用正式发布版本安装或卸载计划任务。";
 
     public static string Install(AppConfig config)
     {
+        if (RuntimeModeService.IsDevelopment)
+            return DevModeTaskMessage;
+
         var exePath = GetExePath();
         var results = new List<string>();
 
@@ -33,6 +37,9 @@ public static class SchedulerService
 
     public static string Uninstall()
     {
+        if (RuntimeModeService.IsDevelopment)
+            return DevModeTaskMessage;
+
         var results = new List<string>();
 
         foreach (var taskName in new[] { FetchTaskName, CleanupTaskName })
@@ -46,6 +53,9 @@ public static class SchedulerService
 
     public static (bool fetchInstalled, bool cleanupInstalled) GetStatus()
     {
+        if (RuntimeModeService.IsDevelopment)
+            return (false, false);
+
         return (TaskExists(FetchTaskName), TaskExists(CleanupTaskName));
     }
 

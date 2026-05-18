@@ -20,8 +20,7 @@ public static class ConfigService
     {
         get
         {
-            var exeDir = AppContext.BaseDirectory;
-            return Path.Combine(exeDir, "config.json");
+            return Path.Combine(RuntimeModeService.StorageRoot, "config.json");
         }
     }
 
@@ -30,18 +29,31 @@ public static class ConfigService
         var path = ConfigPath;
         if (!File.Exists(path))
         {
-            var defaults = new AppConfig();
+            var defaults = CreateDefaultConfig();
             Save(defaults);
             return defaults;
         }
 
         var json = File.ReadAllText(path);
-        return JsonSerializer.Deserialize(json, AppConfigJsonContext.Default.AppConfig) ?? new AppConfig();
+        return JsonSerializer.Deserialize(json, AppConfigJsonContext.Default.AppConfig) ?? CreateDefaultConfig();
     }
 
     public static void Save(AppConfig config)
     {
+        var configDirectory = Path.GetDirectoryName(ConfigPath);
+        if (!string.IsNullOrWhiteSpace(configDirectory))
+            Directory.CreateDirectory(configDirectory);
+
         var json = JsonSerializer.Serialize(config, AppConfigJsonContext.Default.AppConfig);
         File.WriteAllText(ConfigPath, json);
+    }
+
+    private static AppConfig CreateDefaultConfig()
+    {
+        if (!RuntimeModeService.IsDevelopment)
+            return new AppConfig();
+
+        return new AppConfig(
+            LocalBaseDir: Path.Combine(RuntimeModeService.StorageRoot, "historyPackage"));
     }
 }

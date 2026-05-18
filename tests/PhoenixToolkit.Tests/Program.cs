@@ -24,7 +24,10 @@ internal static class Program
             CreatePlanReusesInstallPlanCleanupRules,
             CleanupServiceRunsInstallPlanCleanupAndKeepsLockedPlans,
             CleanupResultDialogUsesFixedScrollableLayout,
-            CleanupResultDialogHasBottomConfirmButton
+            CleanupResultDialogHasBottomConfirmButton,
+            DevelopmentModeRecognizesLaunchArgumentsAndUsesIsolatedConfig,
+            DevelopmentModeBlocksSchedulerChanges,
+            MainFormDisplaysDevelopmentModeMarker
         };
 
         foreach (var test in tests)
@@ -265,6 +268,53 @@ internal static class Program
         Assert.Equal(2, rootLayout.GetPositionFromControl(actionsPanel).Row, "Action area should be placed at the bottom row.");
     }
 
+    private static void DevelopmentModeRecognizesLaunchArgumentsAndUsesIsolatedConfig()
+    {
+        RunInDevelopmentMode(devRoot =>
+        {
+            var launchArgs = RuntimeModeService.Initialize(new[] { "--dev", "--cleanup" });
+
+            Assert.True(RuntimeModeService.IsDevelopment, "Runtime mode should switch to development when --dev is present.");
+            Assert.Equal(1, launchArgs.Length, "Development flag should be removed from the launch argument list.");
+            Assert.Equal("--cleanup", launchArgs[0], "Remaining launch arguments should be preserved.");
+            Assert.Equal(Path.Combine(devRoot, "config.json"), ConfigService.ConfigPath, "Dev mode config should be isolated from the publish directory.");
+
+            var config = ConfigService.Load();
+
+            Assert.True(File.Exists(ConfigService.ConfigPath), "Dev mode should create an isolated config file when missing.");
+            Assert.Equal(Path.Combine(devRoot, "historyPackage"), config.LocalBaseDir, "Dev mode default local storage should live under the dev root.");
+        });
+    }
+
+    private static void DevelopmentModeBlocksSchedulerChanges()
+    {
+        RunInDevelopmentMode(devRoot =>
+        {
+            RuntimeModeService.Initialize(new[] { "--dev" });
+
+            var installMessage = SchedulerService.Install(new AppConfig(LocalBaseDir: Path.Combine(devRoot, "historyPackage")));
+            var uninstallMessage = SchedulerService.Uninstall();
+            var (fetchInstalled, cleanupInstalled) = SchedulerService.GetStatus();
+
+            Assert.Contains(installMessage, "DEV 模式", "Dev mode should block task installation.");
+            Assert.Contains(uninstallMessage, "DEV 模式", "Dev mode should block task uninstallation.");
+            Assert.False(fetchInstalled, "Dev mode should not report production task installation state.");
+            Assert.False(cleanupInstalled, "Dev mode should not report production task installation state.");
+        });
+    }
+
+    private static void MainFormDisplaysDevelopmentModeMarker()
+    {
+        RunInDevelopmentMode(_ =>
+        {
+            RuntimeModeService.Initialize(new[] { "--dev" });
+
+            using var form = new MainForm();
+
+            Assert.Contains(form.Text, "[DEV]", "Main window title should clearly indicate development mode.");
+        });
+    }
+
     private static void RunIsolated(Action<AppConfig> test)
     {
         var root = Path.Combine(Path.GetTempPath(), "PhoenixToolkit.Tests", Guid.NewGuid().ToString("N"));
@@ -294,6 +344,33 @@ internal static class Program
         var json = JsonSerializer.Serialize(plan, JsonOptions);
         File.WriteAllText(path, json);
         return path;
+    }
+
+    private static void RunInDevelopmentMode(Action<string> test)
+    {
+        var devRoot = Path.Combine(Path.GetTempPath(), "PhoenixToolkit.DevTests", Guid.NewGuid().ToString("N"));
+        var previousDevRoot = Environment.GetEnvironmentVariable("PHOENIXTOOLKIT_DEV_ROOT");
+        Directory.CreateDirectory(devRoot);
+
+        try
+        {
+            Environment.SetEnvironmentVariable("PHOENIXTOOLKIT_DEV_ROOT", devRoot);
+            test(devRoot);
+        }
+        finally
+        {
+            RuntimeModeService.Initialize(Array.Empty<string>());
+            Environment.SetEnvironmentVariable("PHOENIXTOOLKIT_DEV_ROOT", previousDevRoot);
+
+            try
+            {
+                Directory.Delete(devRoot, recursive: true);
+            }
+            catch
+            {
+                // Ignore temp cleanup failures in the ad-hoc runner.
+            }
+        }
     }
 
     private static string BuildLongCleanupResult()

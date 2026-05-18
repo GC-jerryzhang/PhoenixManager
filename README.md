@@ -18,6 +18,18 @@ PhoenixToolkit.exe --fetch      # 静默执行一次拉取
 PhoenixToolkit.exe --cleanup    # 静默执行一次清理
 ```
 
+## 开发调试
+
+```powershell
+dotnet run -- --dev
+dotnet run -- --dev --fetch
+dotnet run -- --dev --cleanup
+```
+
+- `--dev` 会进入开发模式，避免每次改动都先发布打包再验证。
+- 开发模式的配置和本地状态会写入 `%LOCALAPPDATA%\PhoenixToolkit\dev\`。
+- 开发模式下不会自动注册协议，也不会安装/卸载计划任务；这些系统级行为请使用正式发布版验证。
+
 ## 构建
 
 ```powershell
