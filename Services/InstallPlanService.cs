@@ -27,6 +27,63 @@ public static class InstallPlanService
         return plan;
     }
 
+    public static void CleanupExpiredPlans(AppConfig config, Action<string, string>? log = null)
+    {
+        Directory.CreateDirectory(config.InstallPlanDir);
+
+        var planPaths = Directory.GetFiles(config.InstallPlanDir, "*.json")
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (planPaths.Count == 0)
+        {
+            log?.Invoke($"Install plans: nothing to clean (retaining {RetentionDays} days).", "INFO");
+            return;
+        }
+
+        log?.Invoke($"--- Install plan cleanup: {planPaths.Count} files ---", "INFO");
+
+        var cutoff = DateTimeOffset.Now.AddDays(-RetentionDays);
+        var kept = 0;
+        var deleted = 0;
+
+        foreach (var path in planPaths)
+        {
+            var fileName = Path.GetFileName(path);
+
+            try
+            {
+                var decision = EvaluateCleanupDecision(path, cutoff, log);
+                if (!decision.ShouldDelete)
+                {
+                    log?.Invoke($"Keep install plan: {fileName} ({decision.Reason})", "INFO");
+                    kept++;
+                    continue;
+                }
+
+                File.Delete(path);
+                log?.Invoke($"Delete install plan: {fileName} ({decision.Reason})", "INFO");
+                deleted++;
+            }
+            catch (IOException ex)
+            {
+                log?.Invoke(
+                    $"Keep install plan: {fileName} (cleanup skipped: {ex.Message})",
+                    "WARNING");
+                kept++;
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                log?.Invoke(
+                    $"Keep install plan: {fileName} (cleanup skipped: {ex.Message})",
+                    "WARNING");
+                kept++;
+            }
+        }
+
+        log?.Invoke($"Install plan summary: kept={kept}, deleted={deleted}", "INFO");
+    }
+
     public static bool TryStartPlan(
         AppConfig config,
         string planId,
@@ -165,22 +222,68 @@ public static class InstallPlanService
         return Path.Combine(config.InstallPlanDir, $"{planId}.json");
     }
 
-    private static void CleanupExpiredPlans(AppConfig config)
+    private static InstallPlanCleanupDecision EvaluateCleanupDecision(
+        string path,
+        DateTimeOffset cutoff,
+        Action<string, string>? log)
     {
-        Directory.CreateDirectory(config.InstallPlanDir);
+        var fileName = Path.GetFileName(path);
+        var fallbackTimestamp = new DateTimeOffset(File.GetLastWriteTimeUtc(path), TimeSpan.Zero);
+        InstallPlan? plan = null;
 
-        foreach (var path in Directory.GetFiles(config.InstallPlanDir, "*.json"))
+        try
         {
-            try
-            {
-                var age = DateTimeOffset.Now - File.GetLastWriteTimeUtc(path);
-                if (age.TotalDays > RetentionDays)
-                    File.Delete(path);
-            }
-            catch
-            {
-                // Ignore cleanup failures so fetch/install flow remains available.
-            }
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            plan = JsonSerializer.Deserialize(stream, AppConfigJsonContext.Default.InstallPlan);
+            if (plan is null)
+                log?.Invoke($"Install plan metadata unreadable: {fileName}, using file timestamp.", "WARNING");
         }
+        catch (IOException)
+        {
+            throw;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            throw;
+        }
+        catch (JsonException ex)
+        {
+            log?.Invoke($"Install plan metadata invalid: {fileName}, using file timestamp. {ex.Message}", "WARNING");
+        }
+        catch (Exception ex)
+        {
+            log?.Invoke($"Install plan metadata unavailable: {fileName}, using file timestamp. {ex.Message}", "WARNING");
+        }
+
+        if (plan?.Status == InstallPlanStatus.Running)
+            return new InstallPlanCleanupDecision(false, "running plan");
+
+        var (timestamp, source) = GetRetentionReference(plan, fallbackTimestamp);
+        if (timestamp < cutoff)
+            return new InstallPlanCleanupDecision(true, $"expired {source}");
+
+        return new InstallPlanCleanupDecision(false, $"within retention by {source}");
     }
+
+    private static (DateTimeOffset Timestamp, string Source) GetRetentionReference(
+        InstallPlan? plan,
+        DateTimeOffset fallbackTimestamp)
+    {
+        if (plan is null)
+            return (fallbackTimestamp, "file timestamp");
+
+        return plan.Status switch
+        {
+            InstallPlanStatus.Pending when plan.CreatedAt != default
+                => (plan.CreatedAt, "pending created time"),
+
+            InstallPlanStatus.Completed or InstallPlanStatus.Failed
+                when plan.CompletedAt is { } completedAt && completedAt != default
+                => (completedAt, $"{plan.Status.ToString().ToLowerInvariant()} completed time"),
+
+            _ => (fallbackTimestamp, "file timestamp")
+        };
+    }
+
+    private readonly record struct InstallPlanCleanupDecision(bool ShouldDelete, string Reason);
 }

@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 dotnet build
 
 # Publish single-file EXE (framework-dependent, ~206KB)
-dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o ./publish
+dotnet publish .\PhoenixToolkit.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o ./publish
 
 # Run GUI
 dotnet run

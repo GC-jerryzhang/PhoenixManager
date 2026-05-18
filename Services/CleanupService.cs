@@ -23,6 +23,7 @@ public static class CleanupService
 
             TieredCleanup(config.DesignerDir, "Designer", config.CleanupWeeks, Log);
             TieredCleanup(config.ServerDir, "Server", config.CleanupWeeks, Log);
+            InstallPlanService.CleanupExpiredPlans(config, Log);
             CleanupLogs(config.LogDir, 30, Log);
 
             Log("=== Cleanup completed ===");

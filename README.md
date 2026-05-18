@@ -21,5 +21,5 @@ PhoenixToolkit.exe --cleanup    # 静默执行一次清理
 ## 构建
 
 ```powershell
-dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o ./publish
+dotnet publish .\PhoenixToolkit.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o ./publish
 ```

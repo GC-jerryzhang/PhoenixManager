@@ -4,3 +4,4 @@ publish/
 .release-home*/
 *.user
 .vs/
+openspec/
