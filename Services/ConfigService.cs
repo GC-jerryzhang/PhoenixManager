@@ -5,6 +5,7 @@ using PhoenixToolkit.Models;
 namespace PhoenixToolkit.Services;
 
 [JsonSerializable(typeof(AppConfig))]
+[JsonSerializable(typeof(CloseBehaviorPreference))]
 [JsonSerializable(typeof(FetchedPackageInfo))]
 [JsonSerializable(typeof(InstallPlan))]
 [JsonSerializable(typeof(Uri))]

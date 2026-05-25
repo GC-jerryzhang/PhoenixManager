@@ -27,7 +27,12 @@ internal static class Program
             CleanupResultDialogHasBottomConfirmButton,
             DevelopmentModeRecognizesLaunchArgumentsAndUsesIsolatedConfig,
             DevelopmentModeBlocksSchedulerChanges,
-            MainFormDisplaysDevelopmentModeMarker
+            MainFormDisplaysDevelopmentModeMarker,
+            MissingCloseBehaviorPreferenceDefaultsToAskEveryTime,
+            CloseBehaviorPreferenceRoundTripsThroughConfigService,
+            CloseBehaviorDecisionRespectsPreferenceAndBypassRules,
+            SettingsDialogShowsSavesAndCancelsCloseBehaviorPreference,
+            MainFormAndCloseDialogExposeTrayCloseControls
         };
 
         foreach (var test in tests)
@@ -315,6 +320,207 @@ internal static class Program
         });
     }
 
+    private static void MissingCloseBehaviorPreferenceDefaultsToAskEveryTime()
+    {
+        RunInDevelopmentMode(devRoot =>
+        {
+            RuntimeModeService.Initialize(new[] { "--dev" });
+            Directory.CreateDirectory(devRoot);
+            File.WriteAllText(
+                ConfigService.ConfigPath,
+                $$"""
+                {
+                  "sourceDir": "\\\\example\\share",
+                  "localBaseDir": "{{Path.Combine(devRoot, "historyPackage").Replace("\\", "\\\\")}}",
+                  "fetchIntervalMinutes": 15,
+                  "cleanupTime": "08:30",
+                  "cleanupWeeks": {
+                    "keepAllWeeks": 3,
+                    "keepDailyWeeks": 6,
+                    "deleteAfterWeeks": 9
+                  }
+                }
+                """);
+
+            var config = ConfigService.Load();
+
+            Assert.Equal(
+                CloseBehaviorPreference.AskEveryTime,
+                config.CloseBehaviorPreference,
+                "Missing close behavior preference should default to asking every time.");
+
+            File.WriteAllText(
+                ConfigService.ConfigPath,
+                $$"""
+                {
+                  "sourceDir": "\\\\example\\share",
+                  "localBaseDir": "{{Path.Combine(devRoot, "historyPackage").Replace("\\", "\\\\")}}",
+                  "fetchIntervalMinutes": 15,
+                  "cleanupTime": "08:30",
+                  "cleanupWeeks": {
+                    "keepAllWeeks": 3,
+                    "keepDailyWeeks": 6,
+                    "deleteAfterWeeks": 9
+                  },
+                  "closeBehaviorPreference": "UnknownValue"
+                }
+                """);
+
+            config = ConfigService.Load();
+
+            Assert.Equal(
+                CloseBehaviorPreference.AskEveryTime,
+                config.CloseBehaviorPreference,
+                "Unreadable close behavior preference should default to asking every time.");
+        });
+    }
+
+    private static void CloseBehaviorPreferenceRoundTripsThroughConfigService()
+    {
+        RunInDevelopmentMode(devRoot =>
+        {
+            RuntimeModeService.Initialize(new[] { "--dev" });
+            var config = new AppConfig(
+                LocalBaseDir: Path.Combine(devRoot, "historyPackage"),
+                CloseBehaviorPreference: CloseBehaviorPreference.MinimizeToTray);
+
+            ConfigService.Save(config);
+            var json = File.ReadAllText(ConfigService.ConfigPath);
+            var loaded = ConfigService.Load();
+
+            Assert.Contains(
+                json,
+                "\"closeBehaviorPreference\": \"MinimizeToTray\"",
+                "Close behavior preference should be persisted as readable JSON.");
+            Assert.Equal(
+                CloseBehaviorPreference.MinimizeToTray,
+                loaded.CloseBehaviorPreference,
+                "Close behavior preference should round-trip through ConfigService.");
+        });
+    }
+
+    private static void CloseBehaviorDecisionRespectsPreferenceAndBypassRules()
+    {
+        Assert.Equal(
+            CloseBehaviorAction.ExitApplication,
+            CloseBehaviorService.ResolveCloseAction(
+                CloseBehaviorPreference.MinimizeToTray,
+                isExplicitExit: true,
+                CloseReason.UserClosing),
+            "Explicit exit should bypass minimize-to-tray preference.");
+        Assert.Equal(
+            CloseBehaviorAction.ExitApplication,
+            CloseBehaviorService.ResolveCloseAction(
+                CloseBehaviorPreference.AskEveryTime,
+                isExplicitExit: false,
+                CloseReason.WindowsShutDown),
+            "Windows shutdown should bypass the close prompt.");
+        Assert.Equal(
+            CloseBehaviorAction.ExitApplication,
+            CloseBehaviorService.ResolveCloseAction(
+                CloseBehaviorPreference.AskEveryTime,
+                isExplicitExit: false,
+                CloseReason.ApplicationExitCall),
+            "Application exit calls should bypass the close prompt.");
+        Assert.Equal(
+            CloseBehaviorAction.PromptUser,
+            CloseBehaviorService.ResolveCloseAction(
+                CloseBehaviorPreference.AskEveryTime,
+                isExplicitExit: false,
+                CloseReason.UserClosing),
+            "AskEveryTime should prompt for user close actions.");
+        Assert.Equal(
+            CloseBehaviorAction.ExitApplication,
+            CloseBehaviorService.ResolveCloseAction(
+                CloseBehaviorPreference.ExitApplication,
+                isExplicitExit: false,
+                CloseReason.UserClosing),
+            "ExitApplication preference should exit directly.");
+        Assert.Equal(
+            CloseBehaviorAction.MinimizeToTray,
+            CloseBehaviorService.ResolveCloseAction(
+                CloseBehaviorPreference.MinimizeToTray,
+                isExplicitExit: false,
+                CloseReason.UserClosing),
+            "MinimizeToTray preference should minimize directly.");
+    }
+
+    private static void SettingsDialogShowsSavesAndCancelsCloseBehaviorPreference()
+    {
+        RunInDevelopmentMode(devRoot =>
+        {
+            RuntimeModeService.Initialize(new[] { "--dev" });
+            ConfigService.Save(new AppConfig(
+                LocalBaseDir: Path.Combine(devRoot, "historyPackage"),
+                CloseBehaviorPreference: CloseBehaviorPreference.ExitApplication));
+
+            using (var cancelDialog = new ApplicationSettingsDialog())
+            {
+                var preferenceComboBox = FindRequiredControl<ComboBox>(cancelDialog, "closeBehaviorPreferenceComboBox");
+
+                Assert.Equal(
+                    CloseBehaviorPreference.ExitApplication,
+                    cancelDialog.SelectedCloseBehaviorPreference,
+                    "Settings dialog should select the current close behavior preference.");
+
+                preferenceComboBox.SelectedItem = CloseBehaviorPreference.MinimizeToTray;
+            }
+
+            Assert.Equal(
+                CloseBehaviorPreference.ExitApplication,
+                ConfigService.Load().CloseBehaviorPreference,
+                "Closing settings without saving should leave close behavior unchanged.");
+
+            using (var saveDialog = new ApplicationSettingsDialog())
+            {
+                var preferenceComboBox = FindRequiredControl<ComboBox>(saveDialog, "closeBehaviorPreferenceComboBox");
+                _ = FindRequiredControl<Button>(saveDialog, "settingsSaveButton");
+
+                preferenceComboBox.SelectedItem = CloseBehaviorPreference.MinimizeToTray;
+                saveDialog.SaveSelectedCloseBehaviorPreference();
+            }
+
+            Assert.Equal(
+                CloseBehaviorPreference.MinimizeToTray,
+                ConfigService.Load().CloseBehaviorPreference,
+                "Saving settings should persist the selected close behavior preference.");
+        });
+    }
+
+    private static void MainFormAndCloseDialogExposeTrayCloseControls()
+    {
+        RunInDevelopmentMode(_ =>
+        {
+            RuntimeModeService.Initialize(new[] { "--dev" });
+
+            using var form = new MainForm();
+            var trayContextMenu = GetPrivateField<ContextMenuStrip>(form, "trayContextMenu");
+            var trayIcon = GetPrivateField<NotifyIcon>(form, "trayIcon");
+
+            Assert.False(trayIcon.Visible, "Tray icon should start hidden while the main window is open.");
+            var trayMenuTexts = trayContextMenu.Items
+                .OfType<ToolStripMenuItem>()
+                .Select(item => item.Text ?? string.Empty);
+            Assert.Contains(
+                trayMenuTexts,
+                text => text == "打开主页面");
+            Assert.Contains(
+                trayMenuTexts,
+                text => text == "设置");
+            Assert.Contains(
+                trayMenuTexts,
+                text => text == "退出");
+
+            using var closeDialog = new CloseChoiceDialog();
+            Assert.NotNull(
+                FindButtonByText(closeDialog, "彻底退出"),
+                "Close choice dialog should expose a full-exit action.");
+            Assert.NotNull(
+                FindButtonByText(closeDialog, "最小化到系统托盘"),
+                "Close choice dialog should expose a minimize-to-tray action.");
+        });
+    }
+
     private static void RunIsolated(Action<AppConfig> test)
     {
         var root = Path.Combine(Path.GetTempPath(), "PhoenixToolkit.Tests", Guid.NewGuid().ToString("N"));
@@ -388,6 +594,34 @@ internal static class Program
             return typedControl;
 
         throw new InvalidOperationException($"Expected to find control '{name}' of type {typeof(T).Name}.");
+    }
+
+    private static Button? FindButtonByText(Control root, string text)
+    {
+        foreach (Control child in root.Controls)
+        {
+            if (child is Button button && button.Text == text)
+                return button;
+
+            var nestedButton = FindButtonByText(child, text);
+            if (nestedButton is not null)
+                return nestedButton;
+        }
+
+        return null;
+    }
+
+    private static T GetPrivateField<T>(object instance, string fieldName)
+        where T : class
+    {
+        var field = instance.GetType().GetField(
+            fieldName,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+        if (field?.GetValue(instance) is T value)
+            return value;
+
+        throw new InvalidOperationException($"Expected private field '{fieldName}' of type {typeof(T).Name}.");
     }
 
     private static class Assert

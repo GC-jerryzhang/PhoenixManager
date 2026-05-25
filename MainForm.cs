@@ -6,9 +6,16 @@ namespace PhoenixToolkit;
 
 public partial class MainForm : Form
 {
+    private CloseBehaviorPreference closeBehaviorPreference = CloseBehaviorPreference.AskEveryTime;
+    private NotifyIcon trayIcon = null!;
+    private ContextMenuStrip trayContextMenu = null!;
+    private bool isExplicitExit;
+    private bool hasShownTrayTip;
+
     public MainForm()
     {
         InitializeComponent();
+        InitializeTrayComponents();
         ApplyRuntimeModePresentation();
         LoadConfig();
         RefreshStatus();
@@ -17,6 +24,7 @@ public partial class MainForm : Form
     private void LoadConfig()
     {
         var config = ConfigService.Load();
+        closeBehaviorPreference = config.CloseBehaviorPreference;
         txtSourceDir.Text = config.SourceDir;
         txtLocalBaseDir.Text = config.LocalBaseDir;
         numFetchInterval.Value = config.FetchIntervalMinutes;
@@ -39,7 +47,8 @@ public partial class MainForm : Form
                 KeepAllWeeks: (int)numKeepAll.Value,
                 KeepDailyWeeks: (int)numKeepDaily.Value,
                 DeleteAfterWeeks: (int)numDeleteAfter.Value
-            )
+            ),
+            CloseBehaviorPreference: closeBehaviorPreference
         );
     }
 
@@ -47,6 +56,133 @@ public partial class MainForm : Form
     {
         var config = BuildConfigFromUI();
         ConfigService.Save(config);
+    }
+
+    private void InitializeTrayComponents()
+    {
+        components ??= new System.ComponentModel.Container();
+
+        trayContextMenu = new ContextMenuStrip(components);
+        var openMainMenuItem = new ToolStripMenuItem("打开主页面", null, (_, _) => RestoreFromTray());
+        var settingsMenuItem = new ToolStripMenuItem("设置", null, (_, _) => OpenSettingsDialog());
+        var exitMenuItem = new ToolStripMenuItem("退出", null, (_, _) => ExitFromTray());
+        trayContextMenu.Items.AddRange(new ToolStripItem[]
+        {
+            openMainMenuItem,
+            settingsMenuItem,
+            new ToolStripSeparator(),
+            exitMenuItem
+        });
+
+        trayIcon = new NotifyIcon(components)
+        {
+            ContextMenuStrip = trayContextMenu,
+            Icon = Icon ?? SystemIcons.Application,
+            Text = "Phoenix 测试辅助工具",
+            Visible = false
+        };
+        trayIcon.DoubleClick += (_, _) => RestoreFromTray();
+        trayIcon.MouseClick += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Left)
+                RestoreFromTray();
+        };
+
+        FormClosing += MainForm_FormClosing;
+        FormClosed += (_, _) => trayIcon.Visible = false;
+    }
+
+    private void MainForm_FormClosing(object? sender, FormClosingEventArgs e)
+    {
+        var closeAction = CloseBehaviorService.ResolveCloseAction(
+            closeBehaviorPreference,
+            isExplicitExit,
+            e.CloseReason);
+
+        if (closeAction == CloseBehaviorAction.PromptUser)
+            closeAction = PromptForCloseAction();
+
+        switch (closeAction)
+        {
+            case CloseBehaviorAction.MinimizeToTray:
+                e.Cancel = true;
+                MinimizeToTray();
+                break;
+
+            case CloseBehaviorAction.PromptUser:
+                e.Cancel = true;
+                break;
+
+            default:
+                trayIcon.Visible = false;
+                break;
+        }
+    }
+
+    private CloseBehaviorAction PromptForCloseAction()
+    {
+        using var dialog = new CloseChoiceDialog();
+        return dialog.ShowDialog(this) == DialogResult.OK
+            ? dialog.SelectedAction
+            : CloseBehaviorAction.PromptUser;
+    }
+
+    private void MinimizeToTray()
+    {
+        Hide();
+        ShowInTaskbar = false;
+        trayIcon.Visible = true;
+
+        if (hasShownTrayTip)
+            return;
+
+        hasShownTrayTip = true;
+        try
+        {
+            trayIcon.ShowBalloonTip(
+                2500,
+                "Phoenix 测试辅助工具",
+                "已最小化到系统托盘。右键托盘图标可打开菜单。",
+                ToolTipIcon.Info);
+        }
+        catch (InvalidOperationException)
+        {
+            // Some Windows shell states reject balloon tips; the tray icon itself is still usable.
+        }
+    }
+
+    private void RestoreFromTray()
+    {
+        trayIcon.Visible = false;
+        ShowInTaskbar = true;
+        if (WindowState == FormWindowState.Minimized)
+            WindowState = FormWindowState.Normal;
+
+        Show();
+        Activate();
+    }
+
+    private void OpenSettingsDialog()
+    {
+        using var dialog = new ApplicationSettingsDialog();
+        if (Visible)
+        {
+            dialog.ShowDialog(this);
+        }
+        else
+        {
+            dialog.StartPosition = FormStartPosition.CenterScreen;
+            dialog.ShowDialog();
+        }
+
+        closeBehaviorPreference = ConfigService.Load().CloseBehaviorPreference;
+    }
+
+    private void ExitFromTray()
+    {
+        isExplicitExit = true;
+        trayIcon.Visible = false;
+        Close();
     }
 
     private void RefreshStatus()

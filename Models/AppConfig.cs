@@ -11,7 +11,8 @@ public sealed record AppConfig(
     string LocalBaseDir = @"D:\TestReceive\historyPackage",
     int FetchIntervalMinutes = 5,
     string CleanupTime = "09:30",
-    CleanupWeeks? CleanupWeeks = null
+    CleanupWeeks? CleanupWeeks = null,
+    CloseBehaviorPreference CloseBehaviorPreference = CloseBehaviorPreference.AskEveryTime
 )
 {
     public CleanupWeeks CleanupWeeks { get; init; } = CleanupWeeks ?? new CleanupWeeks();
