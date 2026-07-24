@@ -8,6 +8,7 @@ namespace PhoenixToolkit.Services;
 [JsonSerializable(typeof(CloseBehaviorPreference))]
 [JsonSerializable(typeof(FetchedPackageInfo))]
 [JsonSerializable(typeof(InstallPlan))]
+[JsonSerializable(typeof(PhoenixServerMigrationJournal))]
 [JsonSerializable(typeof(Uri))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,

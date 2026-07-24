@@ -17,6 +17,7 @@ public static class InstallActivationService
             return;
 
         ToastNotificationManagerCompat.OnActivated += OnToastActivated;
+        RestorePendingPhoenixServerMigrations();
     }
 
     public static bool HandleStartupActivationIfNeeded()
@@ -103,7 +104,10 @@ public static class InstallActivationService
         {
             ValidatePlan(config, plan!);
             AppendInstallLog(config, BuildStartMessage(plan!));
-            InstallerLaunchService.ExecutePlan(plan!);
+            InstallerLaunchService.ExecutePlan(
+                config,
+                plan!,
+                (message, level) => AppendInstallLog(config, message, level));
             InstallPlanService.MarkCompleted(config, planId);
             AppendInstallLog(config, $"安装任务执行完成: {planId}");
         }
@@ -156,5 +160,28 @@ public static class InstallActivationService
         var logPath = Path.Combine(config.LogDir, $"install-phoenix_{DateTime.Now:yyyyMMdd}.log");
         var entry = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [{level}] {message}";
         File.AppendAllLines(logPath, new[] { entry });
+    }
+
+    private static void RestorePendingPhoenixServerMigrations()
+    {
+        if (RuntimeModeService.IsDevelopment)
+            return;
+
+        var config = ConfigService.Load();
+        try
+        {
+            PhoenixServerDataMigrationService.RestorePendingMigrations(
+                PhoenixServerDataMigrationPaths.CreateDefault(),
+                (message, level) => AppendInstallLog(config, message, level),
+                (planId, message) =>
+                {
+                    InstallPlanService.MarkFailed(config, planId, message);
+                    NotificationService.ShowInstallFailure(message);
+                });
+        }
+        catch (Exception ex)
+        {
+            AppendInstallLog(config, $"检测未完成 PhoenixServer 数据恢复失败: {ex.Message}", "ERROR");
+        }
     }
 }

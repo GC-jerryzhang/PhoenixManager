@@ -24,6 +24,22 @@ internal static class Program
             FetchServiceDoesNotFallBackWhenWindowsPlatformSubdirectoryIsEmpty,
             FetchServiceDoesNotFallBackWhenWindowsPlatformLayoutIsIncomplete,
             FetchServiceDoesNotFallBackWhenOnlyLinuxPlatformDirectoriesArePresent,
+            PhoenixServerMigrationStopsServiceBacksUpAndRestoresRenamedData,
+            PhoenixServerMigrationSkipsMissingLegacyDataWithoutStoppingService,
+            ServerInstallBacksUpBeforeLaunchingAndRestoresAfterward,
+            ServerInstallRestoresLegacyDataWhenInstallerFails,
+            ServerInstallRestartsServiceAfterRestoreFailure,
+            ServerInstallRestartsOriginallyRunningServiceWhenPostInstallServiceIsStopped,
+            PendingMigrationRecoversAfterInstallerStartsBeforeItExits,
+            PendingBackupBeforeInstallerRestartsLegacyServiceAndReportsFailure,
+            CorruptMigrationJournalDoesNotBlockOtherPendingRecovery,
+            MigrationReplacementTransactionRollsBackFailedReplacement,
+            MigrationReplacementTransactionCleansRollbackEntryAfterCommit,
+            ProductionReplacementUsesAtomicWin32Move,
+            InstallerJournalFailureWaitsForStartedInstallerToExit,
+            ProductionMigrationRejectsUserOwnedDestinationRoot,
+            InstallPlanServiceRejectsInvalidPlanIdentifier,
+            PhoenixServerLogPathUsesNormalizedLogDirectory,
             CleanupExpiredPlansDeletesExpiredInactivePlans,
             CleanupExpiredPlansFallsBackToFileTimestampForMalformedPlans,
             CreatePlanReusesInstallPlanCleanupRules,
@@ -146,6 +162,482 @@ internal static class Program
                 Path.Combine(sourceDir, "Designer-Windows"),
                 FetchService.ResolveWindowsPackageSourceDirectory(configuredSource, PackageKind.Designer),
                 "A Linux platform directory should prevent a Windows fetch from reading a legacy package at the root.");
+        });
+    }
+
+    private static void PhoenixServerMigrationStopsServiceBacksUpAndRestoresRenamedData()
+    {
+        RunIsolated(config =>
+        {
+            var paths = CreateMigrationPaths(config.LocalBaseDir);
+            Directory.CreateDirectory(Path.Combine(paths.LegacyServerDataDirectory, "nested"));
+            File.WriteAllText(Path.Combine(paths.LegacyServerDataDirectory, "nested", "数据.txt"), "server data");
+            Directory.CreateDirectory(Path.GetDirectoryName(paths.LegacyConfigPath)!);
+            File.WriteAllText(paths.LegacyConfigPath, "legacy config");
+            Directory.CreateDirectory(paths.LegacyWorkspaceDirectory);
+            File.WriteAllText(Path.Combine(paths.LegacyWorkspaceDirectory, "workspace.txt"), "workspace data");
+            var serviceController = new RecordingPhoenixServerServiceController();
+
+            var backup = PhoenixServerDataMigrationService.Backup(
+                config,
+                Guid.NewGuid().ToString("N"),
+                paths,
+                serviceController,
+                (_, _) => { },
+                config.ServerMigrationDir);
+
+            Assert.NotNull(backup, "Existing legacy data should produce a migration backup.");
+            Assert.Equal(1, serviceController.StopCalls, "PhoenixServer must stop before legacy data is backed up.");
+            Assert.True(
+                File.Exists(Path.Combine(backup!.BackupDirectory, "server-data", "nested", "数据.txt")),
+                "Server data should be copied into the backup.");
+            Assert.True(File.Exists(Path.Combine(backup.BackupDirectory, "config.json")), "Config should be copied into the backup.");
+            Assert.True(File.Exists(Path.Combine(backup.BackupDirectory, "workspace", "workspace.txt")), "Workspace should be copied into the backup.");
+
+            Directory.Delete(paths.LegacyServerDataDirectory, recursive: true);
+            File.Delete(paths.LegacyConfigPath);
+            Directory.Delete(paths.LegacyWorkspaceDirectory, recursive: true);
+
+            PhoenixServerDataMigrationService.Restore(backup, paths, (_, _) => { });
+
+            Assert.Equal(
+                "server data",
+                File.ReadAllText(Path.Combine(paths.ServerDataDirectory, "nested", "数据.txt")),
+                "Server data should restore under the normalized server-data directory.");
+            Assert.Equal("legacy config", File.ReadAllText(paths.ConfigPath), "Legacy config should overwrite the new config location.");
+            Assert.Equal(
+                "workspace data",
+                File.ReadAllText(Path.Combine(paths.WorkspaceDirectory, "workspace.txt")),
+                "PhoenixWorkspace should restore under the renamed workspace directory.");
+        });
+    }
+
+    private static void PhoenixServerMigrationSkipsMissingLegacyDataWithoutStoppingService()
+    {
+        RunIsolated(config =>
+        {
+            var paths = CreateMigrationPaths(config.LocalBaseDir);
+            var serviceController = new RecordingPhoenixServerServiceController();
+
+            var backup = PhoenixServerDataMigrationService.Backup(
+                config,
+                Guid.NewGuid().ToString("N"),
+                paths,
+                serviceController,
+                (_, _) => { },
+                config.ServerMigrationDir);
+
+            Assert.Null(backup, "No backup should be created when none of the legacy data paths exist.");
+            Assert.Equal(0, serviceController.StopCalls, "PhoenixServer should not be stopped when no data needs migration.");
+            Assert.False(Directory.Exists(config.ServerMigrationDir), "Missing legacy data should not create a migration directory.");
+        });
+    }
+
+    private static void ServerInstallBacksUpBeforeLaunchingAndRestoresAfterward()
+    {
+        RunIsolated(config =>
+        {
+            var paths = CreateMigrationPaths(config.LocalBaseDir);
+            Directory.CreateDirectory(Path.GetDirectoryName(paths.LegacyConfigPath)!);
+            File.WriteAllText(paths.LegacyConfigPath, "legacy config");
+            var plan = new InstallPlan(
+                Id: Guid.NewGuid().ToString("N"),
+                DesignerPackage: null,
+                ServerPackage: new FetchedPackageInfo(
+                    PackageKind.Server,
+                    "server.exe",
+                    Path.Combine(config.ServerDir, "server.exe"),
+                    DateTimeOffset.Now));
+            var serviceController = new RecordingPhoenixServerServiceController();
+            var events = new List<string>();
+
+            InstallerLaunchService.ExecutePlan(
+                config,
+                plan,
+                (_, _) => { },
+                package =>
+                {
+                    events.Add($"launch:{package.Kind}");
+                    var backupPath = Path.Combine(config.ServerMigrationDir, plan.Id, "config.json");
+                    Assert.True(File.Exists(backupPath), "Legacy config must be backed up before the Server installer starts.");
+                    Directory.CreateDirectory(Path.GetDirectoryName(paths.ConfigPath)!);
+                    File.WriteAllText(paths.ConfigPath, "new default config");
+                },
+                paths,
+                serviceController,
+                config.ServerMigrationDir);
+
+            Assert.Equal("launch:Server", events.Single(), "Only the Server installer should be launched in this scenario.");
+            Assert.Equal(2, serviceController.StopCalls, "Server migration should stop PhoenixServer before backup and before restoring data.");
+            Assert.Equal(1, serviceController.StartCalls, "Server migration should restart the service after restoring data.");
+            Assert.Equal("legacy config", File.ReadAllText(paths.ConfigPath), "Legacy config should restore only after the Server installer returns.");
+        });
+    }
+
+    private static void ServerInstallRestoresLegacyDataWhenInstallerFails()
+    {
+        RunIsolated(config =>
+        {
+            var paths = CreateMigrationPaths(config.LocalBaseDir);
+            Directory.CreateDirectory(Path.GetDirectoryName(paths.LegacyConfigPath)!);
+            File.WriteAllText(paths.LegacyConfigPath, "legacy config");
+            var plan = new InstallPlan(
+                Id: Guid.NewGuid().ToString("N"),
+                DesignerPackage: null,
+                ServerPackage: new FetchedPackageInfo(
+                    PackageKind.Server,
+                    "server.exe",
+                    Path.Combine(config.ServerDir, "server.exe"),
+                    DateTimeOffset.Now));
+            var serviceController = new RecordingPhoenixServerServiceController();
+
+            try
+            {
+                InstallerLaunchService.ExecutePlan(
+                    config,
+                    plan,
+                    (_, _) => { },
+                    _ => throw new InvalidOperationException("installer failed"),
+                    paths,
+                    serviceController,
+                    config.ServerMigrationDir);
+                throw new InvalidOperationException("A failed installer should propagate an error.");
+            }
+            catch (InvalidOperationException ex) when (ex.Message == "installer failed")
+            {
+            }
+
+            Assert.Equal(
+                "legacy config",
+                File.ReadAllText(paths.ConfigPath),
+                "Legacy data should restore even when the Server installer fails.");
+            Assert.Equal(
+                2,
+                serviceController.StopCalls,
+                "A failed installer must stop any newly started PhoenixServer service before restoring legacy data.");
+            Assert.Equal(
+                1,
+                serviceController.StartCalls,
+                "A failed installer should restore the original PhoenixServer service state when it remains available.");
+        });
+    }
+
+    private static void ServerInstallRestartsServiceAfterRestoreFailure()
+    {
+        RunIsolated(config =>
+        {
+            var paths = CreateMigrationPaths(config.LocalBaseDir);
+            Directory.CreateDirectory(Path.GetDirectoryName(paths.LegacyConfigPath)!);
+            File.WriteAllText(paths.LegacyConfigPath, "legacy config");
+            var plan = new InstallPlan(
+                Id: Guid.NewGuid().ToString("N"),
+                DesignerPackage: null,
+                ServerPackage: new FetchedPackageInfo(
+                    PackageKind.Server,
+                    "server.exe",
+                    Path.Combine(config.ServerDir, "server.exe"),
+                    DateTimeOffset.Now));
+            var serviceController = new RecordingPhoenixServerServiceController();
+
+            Assert.Throws<InvalidOperationException>(
+                () => InstallerLaunchService.ExecutePlan(
+                    config,
+                    plan,
+                    (_, _) => { },
+                    _ =>
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetDirectoryName(paths.ConfigPath)!)!);
+                        File.WriteAllText(Path.GetDirectoryName(paths.ConfigPath)!, "blocks data directory creation");
+                    },
+                    paths,
+                    serviceController,
+                    config.ServerMigrationDir),
+                "A failed restore should fail the installation plan.");
+
+            Assert.Equal(
+                1,
+                serviceController.StartCalls,
+                "PhoenixServer must be restarted when it was originally running, even if restoration fails.");
+        });
+    }
+
+    private static void ServerInstallRestartsOriginallyRunningServiceWhenPostInstallServiceIsStopped()
+    {
+        RunIsolated(config =>
+        {
+            var paths = CreateMigrationPaths(config.LocalBaseDir);
+            Directory.CreateDirectory(Path.GetDirectoryName(paths.LegacyConfigPath)!);
+            File.WriteAllText(paths.LegacyConfigPath, "legacy config");
+            var plan = new InstallPlan(
+                Id: Guid.NewGuid().ToString("N"),
+                DesignerPackage: null,
+                ServerPackage: new FetchedPackageInfo(
+                    PackageKind.Server,
+                    "server.exe",
+                    Path.Combine(config.ServerDir, "server.exe"),
+                    DateTimeOffset.Now));
+            var serviceController = new RecordingPhoenixServerServiceController(true, false);
+
+            InstallerLaunchService.ExecutePlan(
+                config,
+                plan,
+                (_, _) => { },
+                _ => { },
+                paths,
+                serviceController,
+                config.ServerMigrationDir);
+
+            Assert.Equal(
+                1,
+                serviceController.StartCalls,
+                "The service should return to its pre-upgrade running state, not depend on the second stop result.");
+        });
+    }
+
+    private static void PendingMigrationRecoversAfterInstallerStartsBeforeItExits()
+    {
+        RunIsolated(config =>
+        {
+            var paths = CreateMigrationPaths(config.LocalBaseDir);
+            Directory.CreateDirectory(Path.GetDirectoryName(paths.LegacyConfigPath)!);
+            File.WriteAllText(paths.LegacyConfigPath, "legacy config");
+            var serviceController = new RecordingPhoenixServerServiceController();
+            var backup = PhoenixServerDataMigrationService.Backup(
+                config,
+                Guid.NewGuid().ToString("N"),
+                paths,
+                serviceController,
+                (_, _) => { },
+                config.ServerMigrationDir);
+
+            Assert.NotNull(backup, "Legacy data should create a backup before the installer is launched.");
+            PhoenixServerDataMigrationService.MarkInstallerStarting(backup!);
+
+            PhoenixServerDataMigrationService.RestorePendingMigrations(
+                paths,
+                (_, _) => { },
+                serviceController,
+                config.ServerMigrationDir,
+                useProductionDestination: false);
+
+            Assert.Equal(
+                "legacy config",
+                File.ReadAllText(paths.ConfigPath),
+                "A crash after the installer starts should remain recoverable on the next Toolkit start.");
+            Assert.Equal(1, serviceController.StartCalls, "Pending recovery should restore the original service state.");
+        });
+    }
+
+    private static void ProductionMigrationRejectsUserOwnedDestinationRoot()
+    {
+        RunIsolated(config =>
+        {
+            var normalizedRoot = Path.Combine(config.LocalBaseDir, "normalized", "PhoenixServer");
+            Directory.CreateDirectory(normalizedRoot);
+            var paths = CreateMigrationPaths(config.LocalBaseDir);
+
+            Assert.Throws<InvalidOperationException>(
+                () => PhoenixServerProductionDataRootSecurity.EnsureTrustedAndSecure(paths),
+                "An elevated migration must reject a normalized data root pre-created by an untrusted user.");
+        });
+    }
+
+    private static void CorruptMigrationJournalDoesNotBlockOtherPendingRecovery()
+    {
+        RunIsolated(config =>
+        {
+            var paths = CreateMigrationPaths(config.LocalBaseDir);
+            Directory.CreateDirectory(Path.GetDirectoryName(paths.LegacyConfigPath)!);
+            File.WriteAllText(paths.LegacyConfigPath, "legacy config");
+            var serviceController = new RecordingPhoenixServerServiceController();
+            var backup = PhoenixServerDataMigrationService.Backup(
+                config,
+                Guid.NewGuid().ToString("N"),
+                paths,
+                serviceController,
+                (_, _) => { },
+                config.ServerMigrationDir);
+
+            Assert.NotNull(backup, "A valid backup should be available for pending recovery.");
+            var corruptDirectory = Path.Combine(config.ServerMigrationDir, Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(corruptDirectory);
+            File.WriteAllText(Path.Combine(corruptDirectory, "migration.json"), "{corrupt journal");
+
+            PhoenixServerDataMigrationService.RestorePendingMigrations(
+                paths,
+                (_, _) => { },
+                serviceController,
+                config.ServerMigrationDir,
+                useProductionDestination: false);
+
+            Assert.Equal(
+                "legacy config",
+                File.ReadAllText(paths.ConfigPath),
+                "A corrupt journal must not prevent recovery from another valid journal.");
+        });
+    }
+
+    private static void PendingBackupBeforeInstallerRestartsLegacyServiceAndReportsFailure()
+    {
+        RunIsolated(config =>
+        {
+            var paths = CreateMigrationPaths(config.LocalBaseDir);
+            Directory.CreateDirectory(Path.GetDirectoryName(paths.LegacyConfigPath)!);
+            File.WriteAllText(paths.LegacyConfigPath, "legacy config");
+            var serviceController = new RecordingPhoenixServerServiceController();
+            var backup = PhoenixServerDataMigrationService.Backup(
+                config,
+                Guid.NewGuid().ToString("N"),
+                paths,
+                serviceController,
+                (_, _) => { },
+                config.ServerMigrationDir);
+            var failures = new List<string>();
+
+            Assert.NotNull(backup, "A backup should exist before the installer has started.");
+            PhoenixServerDataMigrationService.RestorePendingMigrations(
+                paths,
+                (_, _) => { },
+                serviceController,
+                config.ServerMigrationDir,
+                useProductionDestination: false,
+                requireInstallerConfirmation: true,
+                markPlanFailed: (planId, message) => failures.Add($"{planId}:{message}"));
+
+            Assert.Equal(
+                1,
+                serviceController.StartCalls,
+                "A crash before the installer starts must restore the legacy service state.");
+            Assert.Equal(1, failures.Count, "The interrupted upgrade must be marked for visible user recovery.");
+        });
+    }
+
+    private static void MigrationReplacementTransactionRollsBackFailedReplacement()
+    {
+        RunIsolated(config =>
+        {
+            var directory = Path.Combine(config.LocalBaseDir, "replacement");
+            Directory.CreateDirectory(directory);
+            var targetPath = Path.Combine(directory, "config.json");
+            var stagingPath = Path.Combine(directory, "config.json.staging");
+            File.WriteAllText(targetPath, "old config");
+            File.WriteAllText(stagingPath, "new config");
+            var transaction = new PhoenixServerMigrationReplacementTransaction(
+                (source, destination) =>
+                {
+                    if (source == stagingPath && destination == targetPath)
+                        throw new IOException("forced replacement failure");
+
+                    File.Move(source, destination);
+                },
+                File.Delete);
+
+            Assert.Throws<IOException>(
+                () => transaction.Replace(stagingPath, targetPath),
+                "A failed staging move should propagate its failure.");
+            Assert.Equal(
+                "old config",
+                File.ReadAllText(targetPath),
+                "A failed staging move must restore the original target immediately.");
+            Assert.False(
+                Directory.EnumerateFileSystemEntries(directory)
+                    .Any(path => Path.GetFileName(path).Contains("pre-migration", StringComparison.Ordinal)),
+                "A rolled-back replacement must not leave the old target isolated from its original path.");
+        });
+    }
+
+    private static void MigrationReplacementTransactionCleansRollbackEntryAfterCommit()
+    {
+        RunIsolated(config =>
+        {
+            var directory = Path.Combine(config.LocalBaseDir, "replacement");
+            Directory.CreateDirectory(directory);
+            var targetPath = Path.Combine(directory, "config.json");
+            var stagingPath = Path.Combine(directory, "config.json.staging");
+            File.WriteAllText(targetPath, "old config");
+            File.WriteAllText(stagingPath, "new config");
+            var transaction = new PhoenixServerMigrationReplacementTransaction(File.Move, File.Delete);
+
+            transaction.Replace(stagingPath, targetPath);
+            transaction.Commit();
+
+            Assert.Equal("new config", File.ReadAllText(targetPath), "The staged data should replace the target after commit.");
+            Assert.False(
+                Directory.EnumerateFileSystemEntries(directory)
+                    .Any(path => Path.GetFileName(path).Contains("pre-migration", StringComparison.Ordinal)),
+                "A committed replacement should clean the rollback entry after the journal is durable.");
+        });
+    }
+
+    private static void ProductionReplacementUsesAtomicWin32Move()
+    {
+        RunIsolated(config =>
+        {
+            var directory = Path.Combine(config.LocalBaseDir, "native-replacement");
+            Directory.CreateDirectory(directory);
+            var targetPath = Path.Combine(directory, "config.json");
+            var stagingPath = Path.Combine(directory, "config.json.staging");
+            File.WriteAllText(targetPath, "old config");
+            File.WriteAllText(stagingPath, "new config");
+
+            PhoenixServerProductionDataRootSecurity.ReplaceEntry(stagingPath, targetPath);
+
+            Assert.Equal(
+                "new config",
+                File.ReadAllText(targetPath),
+                "The native production replacement operation should atomically replace the target entry.");
+            Assert.False(File.Exists(stagingPath), "The staging entry should no longer exist after replacement.");
+        });
+    }
+
+    private static void InstallerJournalFailureWaitsForStartedInstallerToExit()
+    {
+        var startInfo = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = Path.Combine(Environment.SystemDirectory, "cmd.exe"),
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        startInfo.ArgumentList.Add("/c");
+        startInfo.ArgumentList.Add("ping -n 2 127.0.0.1 > nul");
+
+        using var process = System.Diagnostics.Process.Start(startInfo)
+            ?? throw new InvalidOperationException("The test installer process could not start.");
+        Assert.Throws<InvalidOperationException>(
+            () => InstallerLaunchService.WaitForInstallerProcessAfterStart(
+                process,
+                () => throw new IOException("forced journal write failure")),
+            "A journal write failure should stop the launch flow.");
+        Assert.True(
+            process.HasExited,
+            "Recovery must not begin until an installer that already started has exited.");
+    }
+
+    private static void InstallPlanServiceRejectsInvalidPlanIdentifier()
+    {
+        RunIsolated(config =>
+        {
+            var started = InstallPlanService.TryStartPlan(config, "..\\unexpected", out _, out var errorMessage);
+
+            Assert.False(started, "Invalid plan identifiers must not resolve to a file path.");
+            Assert.Equal("安装任务编号无效。", errorMessage, "Invalid plan identifiers should return a clear error.");
+        });
+    }
+
+    private static void PhoenixServerLogPathUsesNormalizedLogDirectory()
+    {
+        RunIsolated(config =>
+        {
+            var paths = CreateMigrationPaths(config.LocalBaseDir);
+
+            Assert.Equal(
+                paths.LogDirectory,
+                PhoenixServerLogPathService.Resolve(paths, string.Empty),
+                "The log root should use ProgramData PhoenixServer Logs.");
+            Assert.Equal(
+                Path.Combine(paths.LogDirectory, "server-local"),
+                PhoenixServerLogPathService.Resolve(paths, "server-local"),
+                "Log subdirectories should remain under the normalized log root.");
         });
     }
 
@@ -638,6 +1130,45 @@ internal static class Program
         }
     }
 
+    private static PhoenixServerDataMigrationPaths CreateMigrationPaths(string root)
+    {
+        return new PhoenixServerDataMigrationPaths(
+            LegacyServerDataDirectory: Path.Combine(root, "legacy", "PhoenixServer", "server-data"),
+            LegacyConfigPath: Path.Combine(root, "legacy", "PhoenixServer", "config.json"),
+            LegacyWorkspaceDirectory: Path.Combine(root, "legacy", "PhoenixWorkspace"),
+            ServerDataDirectory: Path.Combine(root, "normalized", "PhoenixServer", "Data", "server-data"),
+            ConfigPath: Path.Combine(root, "normalized", "PhoenixServer", "Data", "config.json"),
+            WorkspaceDirectory: Path.Combine(root, "normalized", "PhoenixServer", "Data", "workspace"),
+            LogDirectory: Path.Combine(root, "normalized", "PhoenixServer", "Logs"));
+    }
+
+    private sealed class RecordingPhoenixServerServiceController : IPhoenixServerServiceController
+    {
+        private readonly Queue<bool> stopResults;
+
+        public RecordingPhoenixServerServiceController(params bool[] stopResults)
+        {
+            this.stopResults = new Queue<bool>(stopResults);
+        }
+
+        public int StopCalls { get; private set; }
+
+        public int StartCalls { get; private set; }
+
+        public bool StopAndWait(string serviceName)
+        {
+            Assert.Equal("PhoenixServer", serviceName, "Migration should stop the PhoenixServer service.");
+            StopCalls++;
+            return stopResults.Count == 0 || stopResults.Dequeue();
+        }
+
+        public void StartAndWait(string serviceName)
+        {
+            Assert.Equal("PhoenixServer", serviceName, "Migration should restart the PhoenixServer service.");
+            StartCalls++;
+        }
+    }
+
     private static string WritePlan(AppConfig config, string fileName, InstallPlan plan)
     {
         Directory.CreateDirectory(config.InstallPlanDir);
@@ -739,6 +1270,13 @@ internal static class Program
                 throw new InvalidOperationException(message);
         }
 
+        public static void Null<T>(T? value, string message)
+            where T : class
+        {
+            if (value is not null)
+                throw new InvalidOperationException(message);
+        }
+
         public static void Contains(IEnumerable<string> values, Func<string, bool> predicate)
         {
             if (!values.Any(predicate))
@@ -749,6 +1287,21 @@ internal static class Program
         {
             if (!text.Contains(expectedSubstring, StringComparison.Ordinal))
                 throw new InvalidOperationException(message);
+        }
+
+        public static void Throws<TException>(Action action, string message)
+            where TException : Exception
+        {
+            try
+            {
+                action();
+            }
+            catch (TException)
+            {
+                return;
+            }
+
+            throw new InvalidOperationException(message);
         }
 
         public static void Equal<T>(T expected, T actual, string message)

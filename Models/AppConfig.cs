@@ -22,4 +22,5 @@ public sealed record AppConfig(
     public string LogDir => Path.Combine(LocalBaseDir, "log");
     public string StateDir => Path.Combine(LocalBaseDir, "state");
     public string InstallPlanDir => Path.Combine(StateDir, "install-plans");
+    public string ServerMigrationDir => Path.Combine(StateDir, "server-migrations");
 }

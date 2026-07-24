@@ -312,9 +312,7 @@ public partial class MainForm : Form
 
     private void OpenLogFolder(string subDir)
     {
-        var path = string.IsNullOrEmpty(subDir)
-            ? Path.Combine(Path.GetTempPath(), "phoenix-logs")
-            : Path.Combine(Path.GetTempPath(), "phoenix-logs", subDir);
+        var path = PhoenixServerLogPathService.Resolve(subDir);
 
         if (Directory.Exists(path))
             Process.Start("explorer.exe", path);

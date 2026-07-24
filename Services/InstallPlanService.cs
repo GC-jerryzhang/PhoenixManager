@@ -153,7 +153,17 @@ public static class InstallPlanService
         updatedPlan = null;
         errorMessage = string.Empty;
 
-        var planPath = GetPlanPath(config, planId);
+        string planPath;
+        try
+        {
+            planPath = GetPlanPath(config, planId);
+        }
+        catch (ArgumentException)
+        {
+            errorMessage = "安装任务编号无效。";
+            return false;
+        }
+
         if (!File.Exists(planPath))
         {
             errorMessage = "安装任务不存在或已过期。";
@@ -175,6 +185,12 @@ public static class InstallPlanService
             if (existingPlan is null)
             {
                 errorMessage = "安装任务内容损坏，无法执行。";
+                return false;
+            }
+
+            if (!string.Equals(existingPlan.Id, NormalizePlanId(planId), StringComparison.Ordinal))
+            {
+                errorMessage = "安装任务编号与内容不匹配。";
                 return false;
             }
 
@@ -219,7 +235,15 @@ public static class InstallPlanService
 
     private static string GetPlanPath(AppConfig config, string planId)
     {
-        return Path.Combine(config.InstallPlanDir, $"{planId}.json");
+        return Path.Combine(config.InstallPlanDir, $"{NormalizePlanId(planId)}.json");
+    }
+
+    private static string NormalizePlanId(string planId)
+    {
+        if (!Guid.TryParseExact(planId, "N", out var parsedPlanId))
+            throw new ArgumentException("Invalid install plan identifier.", nameof(planId));
+
+        return parsedPlanId.ToString("N");
     }
 
     private static InstallPlanCleanupDecision EvaluateCleanupDecision(
