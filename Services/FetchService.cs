@@ -7,6 +7,10 @@ namespace PhoenixToolkit.Services;
 public static class FetchService
 {
     private const int StabilityWaitMs = 5000;
+    private const string DesignerLinuxSourceFolder = "Designer-Linux";
+    private const string DesignerWindowsSourceFolder = "Designer-Windows";
+    private const string ServerLinuxSourceFolder = "Server-Linux";
+    private const string ServerWindowsSourceFolder = "Server-Windows";
 
     public static string Execute(AppConfig config)
     {
@@ -52,7 +56,14 @@ public static class FetchService
     {
         log("--- Designer check ---", "INFO");
 
-        var designerFiles = Directory.GetFiles(config.SourceDir, "Phoenix-Windows-*.exe")
+        var sourceDirectory = ResolveWindowsPackageSourceDirectory(config, PackageKind.Designer);
+        if (!Directory.Exists(sourceDirectory))
+        {
+            log($"Designer source directory not accessible: {sourceDirectory}", "WARNING");
+            return null;
+        }
+
+        var designerFiles = Directory.GetFiles(sourceDirectory, "Phoenix-Windows-*.exe")
             .Select(f => new FileInfo(f))
             .Where(f => !f.Name.Contains("Server", StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(f => f.LastWriteTime)
@@ -60,7 +71,7 @@ public static class FetchService
 
         if (designerFiles.Count == 0)
         {
-            log("No Designer installer found in source.", "WARNING");
+            log($"No Designer installer found in source: {sourceDirectory}", "WARNING");
             return null;
         }
 
@@ -106,14 +117,21 @@ public static class FetchService
     {
         log("--- Server check ---", "INFO");
 
-        var serverFiles = Directory.GetFiles(config.SourceDir, "Phoenix-Server-Windows-*.exe")
+        var sourceDirectory = ResolveWindowsPackageSourceDirectory(config, PackageKind.Server);
+        if (!Directory.Exists(sourceDirectory))
+        {
+            log($"Server source directory not accessible: {sourceDirectory}", "WARNING");
+            return null;
+        }
+
+        var serverFiles = Directory.GetFiles(sourceDirectory, "Phoenix-Server-Windows-*.exe")
             .Select(f => new FileInfo(f))
             .OrderByDescending(f => f.LastWriteTime)
             .ToList();
 
         if (serverFiles.Count == 0)
         {
-            log("No Server installer found in source.", "WARNING");
+            log($"No Server installer found in source: {sourceDirectory}", "WARNING");
             return null;
         }
 
@@ -161,6 +179,27 @@ public static class FetchService
         var size2 = new FileInfo(path).Length;
         return size1 == size2;
     }
+
+    internal static string ResolveWindowsPackageSourceDirectory(AppConfig config, PackageKind packageKind)
+    {
+        var platformFolder = packageKind switch
+        {
+            PackageKind.Designer => DesignerWindowsSourceFolder,
+            PackageKind.Server => ServerWindowsSourceFolder,
+            _ => throw new ArgumentOutOfRangeException(nameof(packageKind), packageKind, "Unsupported package kind.")
+        };
+        var platformSourceDirectory = Path.Combine(config.SourceDir, platformFolder);
+
+        return HasPlatformSpecificLayout(config.SourceDir)
+            ? platformSourceDirectory
+            : config.SourceDir;
+    }
+
+    private static bool HasPlatformSpecificLayout(string sourceDirectory) =>
+        Directory.Exists(Path.Combine(sourceDirectory, DesignerLinuxSourceFolder)) ||
+        Directory.Exists(Path.Combine(sourceDirectory, DesignerWindowsSourceFolder)) ||
+        Directory.Exists(Path.Combine(sourceDirectory, ServerLinuxSourceFolder)) ||
+        Directory.Exists(Path.Combine(sourceDirectory, ServerWindowsSourceFolder));
 
     private static void EnsureDirectories(AppConfig config)
     {

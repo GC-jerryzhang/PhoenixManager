@@ -19,6 +19,11 @@ internal static class Program
     {
         var tests = new Action[]
         {
+            FetchServiceUsesWindowsPlatformSubdirectoriesWhenAvailable,
+            FetchServiceFallsBackToFlatSourceDirectoryWhenWindowsSubdirectoriesAreMissing,
+            FetchServiceDoesNotFallBackWhenWindowsPlatformSubdirectoryIsEmpty,
+            FetchServiceDoesNotFallBackWhenWindowsPlatformLayoutIsIncomplete,
+            FetchServiceDoesNotFallBackWhenOnlyLinuxPlatformDirectoriesArePresent,
             CleanupExpiredPlansDeletesExpiredInactivePlans,
             CleanupExpiredPlansFallsBackToFileTimestampForMalformedPlans,
             CreatePlanReusesInstallPlanCleanupRules,
@@ -52,6 +57,96 @@ internal static class Program
 
         Console.WriteLine($"Executed {tests.Length} tests.");
         return 0;
+    }
+
+    private static void FetchServiceUsesWindowsPlatformSubdirectoriesWhenAvailable()
+    {
+        RunIsolated(config =>
+        {
+            var sourceDir = Path.Combine(config.LocalBaseDir, "source");
+            var configuredSource = config with { SourceDir = sourceDir };
+            var designerSourceDir = Path.Combine(sourceDir, "Designer-Windows");
+            var serverSourceDir = Path.Combine(sourceDir, "Server-Windows");
+            Directory.CreateDirectory(designerSourceDir);
+            Directory.CreateDirectory(serverSourceDir);
+
+            Assert.Equal(
+                designerSourceDir,
+                FetchService.ResolveWindowsPackageSourceDirectory(configuredSource, PackageKind.Designer),
+                "Designer should use its Windows platform subdirectory when available.");
+            Assert.Equal(
+                serverSourceDir,
+                FetchService.ResolveWindowsPackageSourceDirectory(configuredSource, PackageKind.Server),
+                "Server should use its Windows platform subdirectory when available.");
+        });
+    }
+
+    private static void FetchServiceFallsBackToFlatSourceDirectoryWhenWindowsSubdirectoriesAreMissing()
+    {
+        RunIsolated(config =>
+        {
+            var sourceDir = Path.Combine(config.LocalBaseDir, "source");
+            Directory.CreateDirectory(sourceDir);
+            var configuredSource = config with { SourceDir = sourceDir };
+
+            Assert.Equal(
+                sourceDir,
+                FetchService.ResolveWindowsPackageSourceDirectory(configuredSource, PackageKind.Designer),
+                "Designer should retain support for the legacy flat source layout.");
+            Assert.Equal(
+                sourceDir,
+                FetchService.ResolveWindowsPackageSourceDirectory(configuredSource, PackageKind.Server),
+                "Server should retain support for the legacy flat source layout.");
+        });
+    }
+
+    private static void FetchServiceDoesNotFallBackWhenWindowsPlatformSubdirectoryIsEmpty()
+    {
+        RunIsolated(config =>
+        {
+            var sourceDir = Path.Combine(config.LocalBaseDir, "source");
+            var serverSourceDir = Path.Combine(sourceDir, "Server-Windows");
+            Directory.CreateDirectory(serverSourceDir);
+            File.WriteAllText(Path.Combine(sourceDir, "Phoenix-Server-Windows-202607241249.exe"), "legacy package");
+            var configuredSource = config with { SourceDir = sourceDir };
+
+            Assert.Equal(
+                serverSourceDir,
+                FetchService.ResolveWindowsPackageSourceDirectory(configuredSource, PackageKind.Server),
+                "An existing Windows platform directory should remain authoritative even when it is empty.");
+        });
+    }
+
+    private static void FetchServiceDoesNotFallBackWhenWindowsPlatformLayoutIsIncomplete()
+    {
+        RunIsolated(config =>
+        {
+            var sourceDir = Path.Combine(config.LocalBaseDir, "source");
+            Directory.CreateDirectory(Path.Combine(sourceDir, "Designer-Windows"));
+            File.WriteAllText(Path.Combine(sourceDir, "Phoenix-Server-Windows-202607241249.exe"), "legacy package");
+            var configuredSource = config with { SourceDir = sourceDir };
+
+            Assert.Equal(
+                Path.Combine(sourceDir, "Server-Windows"),
+                FetchService.ResolveWindowsPackageSourceDirectory(configuredSource, PackageKind.Server),
+                "A partially migrated platform layout should not read a legacy Server package from the root directory.");
+        });
+    }
+
+    private static void FetchServiceDoesNotFallBackWhenOnlyLinuxPlatformDirectoriesArePresent()
+    {
+        RunIsolated(config =>
+        {
+            var sourceDir = Path.Combine(config.LocalBaseDir, "source");
+            Directory.CreateDirectory(Path.Combine(sourceDir, "Designer-Linux"));
+            File.WriteAllText(Path.Combine(sourceDir, "Phoenix-Windows-0.0.1-Setup.exe"), "legacy package");
+            var configuredSource = config with { SourceDir = sourceDir };
+
+            Assert.Equal(
+                Path.Combine(sourceDir, "Designer-Windows"),
+                FetchService.ResolveWindowsPackageSourceDirectory(configuredSource, PackageKind.Designer),
+                "A Linux platform directory should prevent a Windows fetch from reading a legacy package at the root.");
+        });
     }
 
     private static void CleanupExpiredPlansDeletesExpiredInactivePlans()
