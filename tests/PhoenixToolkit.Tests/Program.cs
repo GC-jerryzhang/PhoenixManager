@@ -39,7 +39,8 @@ internal static class Program
             InstallerJournalFailureWaitsForStartedInstallerToExit,
             ProductionMigrationRejectsUserOwnedDestinationRoot,
             InstallPlanServiceRejectsInvalidPlanIdentifier,
-            PhoenixServerLogPathUsesNormalizedLogDirectory,
+            ProductLogPathUsesPhoenixDesignerTempDirectory,
+            MainFormUsesCurrentProductLogNames,
             CleanupExpiredPlansDeletesExpiredInactivePlans,
             CleanupExpiredPlansFallsBackToFileTimestampForMalformedPlans,
             CreatePlanReusesInstallPlanCleanupRules,
@@ -624,20 +625,47 @@ internal static class Program
         });
     }
 
-    private static void PhoenixServerLogPathUsesNormalizedLogDirectory()
+    private static void ProductLogPathUsesPhoenixDesignerTempDirectory()
     {
-        RunIsolated(config =>
-        {
-            var paths = CreateMigrationPaths(config.LocalBaseDir);
+        var logRoot = Path.Combine(Path.GetTempPath(), "PhoenixDesigner");
 
-            Assert.Equal(
-                paths.LogDirectory,
-                PhoenixServerLogPathService.Resolve(paths, string.Empty),
-                "The log root should use ProgramData PhoenixServer Logs.");
-            Assert.Equal(
-                Path.Combine(paths.LogDirectory, "server-local"),
-                PhoenixServerLogPathService.Resolve(paths, "server-local"),
-                "Log subdirectories should remain under the normalized log root.");
+        Assert.Equal(
+            logRoot,
+            ProductLogPathService.Resolve(string.Empty),
+            "Product log quick-open should use the PhoenixDesigner temp directory.");
+        Assert.Equal(
+            Path.Combine(logRoot, ProductLogPathService.DesignerJavaDirectory),
+            ProductLogPathService.Resolve(ProductLogPathService.DesignerJavaDirectory),
+            "Designer Java logs should resolve under the PhoenixDesigner root.");
+        Assert.Equal(
+            Path.Combine(logRoot, ProductLogPathService.DesignerNodeDirectory),
+            ProductLogPathService.Resolve(ProductLogPathService.DesignerNodeDirectory),
+            "Designer Node logs should resolve under the PhoenixDesigner root.");
+        Assert.Equal(
+            Path.Combine(logRoot, ProductLogPathService.RuntimeJavaDirectory),
+            ProductLogPathService.Resolve(ProductLogPathService.RuntimeJavaDirectory),
+            "Runtime Java logs should resolve under the PhoenixDesigner root.");
+        Assert.Equal(
+            Path.Combine(logRoot, ProductLogPathService.ServerJavaDirectory),
+            ProductLogPathService.Resolve(ProductLogPathService.ServerJavaDirectory),
+            "Server Java logs should resolve under the PhoenixDesigner root.");
+        Assert.Throws<ArgumentException>(
+            () => ProductLogPathService.Resolve("..\\outside"),
+            "Product log subdirectories must not escape the PhoenixDesigner root.");
+    }
+
+    private static void MainFormUsesCurrentProductLogNames()
+    {
+        RunInDevelopmentMode(_ =>
+        {
+            RuntimeModeService.Initialize(new[] { "--dev" });
+
+            using var form = new MainForm();
+
+            Assert.NotNull(FindButtonByText(form, "Designer Java"), "The Designer Java log button should be visible.");
+            Assert.NotNull(FindButtonByText(form, "Designer Node"), "The Designer Node log button should be visible.");
+            Assert.NotNull(FindButtonByText(form, "Runtime Java"), "The Runtime Java log button should be visible.");
+            Assert.NotNull(FindButtonByText(form, "Server Java"), "The Server Java log button should be visible.");
         });
     }
 

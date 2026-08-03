@@ -60,10 +60,10 @@ partial class MainForm
         this.lblLogsTitle = CreateSectionTitle("产品日志");
         this.lblLogsDesc = CreateSectionDescription("快速打开常用日志目录");
         this.logsButtonsLayout = new TableLayoutPanel();
-        this.btnLogDesigner = new Button();
-        this.btnLogDesignerServer = new Button();
-        this.btnLogRuntimeServer = new Button();
-        this.btnLogServerLocal = new Button();
+        this.btnLogDesignerJava = new Button();
+        this.btnLogDesignerNode = new Button();
+        this.btnLogRuntimeJava = new Button();
+        this.btnLogServerJava = new Button();
         this.btnLogRoot = new Button();
         this.actionsLayout = new TableLayoutPanel();
         this.btnInstall = new Button();
@@ -404,10 +404,10 @@ partial class MainForm
         this.logsButtonsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
         this.logsButtonsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
         this.logsButtonsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
-        this.logsButtonsLayout.Controls.Add(this.btnLogDesigner, 0, 0);
-        this.logsButtonsLayout.Controls.Add(this.btnLogDesignerServer, 1, 0);
-        this.logsButtonsLayout.Controls.Add(this.btnLogRuntimeServer, 2, 0);
-        this.logsButtonsLayout.Controls.Add(this.btnLogServerLocal, 3, 0);
+        this.logsButtonsLayout.Controls.Add(this.btnLogDesignerJava, 0, 0);
+        this.logsButtonsLayout.Controls.Add(this.btnLogDesignerNode, 1, 0);
+        this.logsButtonsLayout.Controls.Add(this.btnLogRuntimeJava, 2, 0);
+        this.logsButtonsLayout.Controls.Add(this.btnLogServerJava, 3, 0);
         this.logsButtonsLayout.Controls.Add(this.btnLogRoot, 4, 0);
         this.logsButtonsLayout.Dock = DockStyle.Top;
         this.logsButtonsLayout.Location = new Point(0, 44);
@@ -418,25 +418,25 @@ partial class MainForm
         //
         // log buttons
         //
-        ConfigureSecondaryButton(this.btnLogDesigner, "Designer");
-        ConfigureSecondaryButton(this.btnLogDesignerServer, "Designer后端");
-        ConfigureSecondaryButton(this.btnLogRuntimeServer, "Runtime");
-        ConfigureSecondaryButton(this.btnLogServerLocal, "Server");
+        ConfigureSecondaryButton(this.btnLogDesignerJava, "Designer Java");
+        ConfigureSecondaryButton(this.btnLogDesignerNode, "Designer Node");
+        ConfigureSecondaryButton(this.btnLogRuntimeJava, "Runtime Java");
+        ConfigureSecondaryButton(this.btnLogServerJava, "Server Java");
         ConfigureSecondaryButton(this.btnLogRoot, "日志根目录");
-        this.btnLogDesigner.Dock = DockStyle.Fill;
-        this.btnLogDesignerServer.Dock = DockStyle.Fill;
-        this.btnLogRuntimeServer.Dock = DockStyle.Fill;
-        this.btnLogServerLocal.Dock = DockStyle.Fill;
+        this.btnLogDesignerJava.Dock = DockStyle.Fill;
+        this.btnLogDesignerNode.Dock = DockStyle.Fill;
+        this.btnLogRuntimeJava.Dock = DockStyle.Fill;
+        this.btnLogServerJava.Dock = DockStyle.Fill;
         this.btnLogRoot.Dock = DockStyle.Fill;
-        this.btnLogDesigner.Margin = new Padding(0, 0, 6, 0);
-        this.btnLogDesignerServer.Margin = new Padding(0, 0, 6, 0);
-        this.btnLogRuntimeServer.Margin = new Padding(0, 0, 6, 0);
-        this.btnLogServerLocal.Margin = new Padding(0, 0, 6, 0);
+        this.btnLogDesignerJava.Margin = new Padding(0, 0, 6, 0);
+        this.btnLogDesignerNode.Margin = new Padding(0, 0, 6, 0);
+        this.btnLogRuntimeJava.Margin = new Padding(0, 0, 6, 0);
+        this.btnLogServerJava.Margin = new Padding(0, 0, 6, 0);
         this.btnLogRoot.Margin = new Padding(0);
-        this.btnLogDesigner.Click += BtnLogDesigner_Click;
-        this.btnLogDesignerServer.Click += BtnLogDesignerServer_Click;
-        this.btnLogRuntimeServer.Click += BtnLogRuntimeServer_Click;
-        this.btnLogServerLocal.Click += BtnLogServerLocal_Click;
+        this.btnLogDesignerJava.Click += BtnLogDesignerJava_Click;
+        this.btnLogDesignerNode.Click += BtnLogDesignerNode_Click;
+        this.btnLogRuntimeJava.Click += BtnLogRuntimeJava_Click;
+        this.btnLogServerJava.Click += BtnLogServerJava_Click;
         this.btnLogRoot.Click += BtnLogRoot_Click;
         //
         // actionsLayout
@@ -688,10 +688,10 @@ partial class MainForm
     private Label lblLogsTitle;
     private Label lblLogsDesc;
     private TableLayoutPanel logsButtonsLayout;
-    private Button btnLogDesigner;
-    private Button btnLogDesignerServer;
-    private Button btnLogRuntimeServer;
-    private Button btnLogServerLocal;
+    private Button btnLogDesignerJava;
+    private Button btnLogDesignerNode;
+    private Button btnLogRuntimeJava;
+    private Button btnLogServerJava;
     private Button btnLogRoot;
     private TableLayoutPanel actionsLayout;
     private Button btnInstall;

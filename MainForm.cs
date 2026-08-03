@@ -312,7 +312,7 @@ public partial class MainForm : Form
 
     private void OpenLogFolder(string subDir)
     {
-        var path = PhoenixServerLogPathService.Resolve(subDir);
+        var path = ProductLogPathService.Resolve(subDir);
 
         if (Directory.Exists(path))
             Process.Start("explorer.exe", path);
@@ -321,17 +321,17 @@ public partial class MainForm : Form
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
-    private void BtnLogDesigner_Click(object? sender, EventArgs e) =>
-        OpenLogFolder("designer");
+    private void BtnLogDesignerJava_Click(object? sender, EventArgs e) =>
+        OpenLogFolder(ProductLogPathService.DesignerJavaDirectory);
 
-    private void BtnLogDesignerServer_Click(object? sender, EventArgs e) =>
-        OpenLogFolder("designer-server");
+    private void BtnLogDesignerNode_Click(object? sender, EventArgs e) =>
+        OpenLogFolder(ProductLogPathService.DesignerNodeDirectory);
 
-    private void BtnLogRuntimeServer_Click(object? sender, EventArgs e) =>
-        OpenLogFolder("runtime-server");
+    private void BtnLogRuntimeJava_Click(object? sender, EventArgs e) =>
+        OpenLogFolder(ProductLogPathService.RuntimeJavaDirectory);
 
-    private void BtnLogServerLocal_Click(object? sender, EventArgs e) =>
-        OpenLogFolder("server-local");
+    private void BtnLogServerJava_Click(object? sender, EventArgs e) =>
+        OpenLogFolder(ProductLogPathService.ServerJavaDirectory);
 
     private void BtnLogRoot_Click(object? sender, EventArgs e) =>
         OpenLogFolder("");
